@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>God Hand — Agent Sandbox</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="hud">
+      <div class="hud-brand">
+        <div class="hud-title">God Hand</div>
+        <div class="hud-hint">Drag resources into the world</div>
+      </div>
+      <div class="hud-bars">
+        <div class="bar-row">
+          <span class="bar-label">Hunger</span>
+          <div class="bar" aria-label="Hunger">
+            <div id="hunger-fill" class="bar-fill hunger"></div>
+          </div>
+          <span id="hunger-val" class="bar-val">70%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Energy</span>
+          <div class="bar" aria-label="Energy">
+            <div id="energy-fill" class="bar-fill energy"></div>
+          </div>
+          <span id="energy-val" class="bar-val">100%</span>
+        </div>
+      </div>
+      <div class="hud-action">
+        <span class="action-kicker">Mind</span>
+        <span id="brain-action">Idle</span>
+      </div>
+      <div id="inventory" class="hud-inv"></div>
+    </div>
+
+    <div id="toolbar">
+      <div class="toolbar-inner">
+        <div class="toolbar-label">Raw offerings</div>
+        <div class="tools" id="tools"></div>
+      </div>
+    </div>
+
+    <div id="drag-chip" hidden></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

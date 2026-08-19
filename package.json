@@ -1,0 +1,19 @@
+{
+  "name": "god-hand-agent",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A Three.js god-hand sandbox: drop resources for a tiny-MLP agent to eat, craft, and build.",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host --port 5173",
+    "brain-check": "node scripts/brain-sanity.mjs"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

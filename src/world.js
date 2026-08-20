@@ -75,6 +75,7 @@ function makeGroundTexture() {
 
 function createBiomes(scene) {
   const fauna = [];
+  const forageSources = [];
   
   // Meadow (center/east): grass, berries, rabbits
   const meadowMat = new THREE.MeshStandardMaterial({
@@ -96,23 +97,161 @@ function createBiomes(scene) {
     scene.add(grass);
   }
   
-  // Berry bushes
+  // Berry bushes (harvestable) - now with visible red berries
   const berryBushMat = new THREE.MeshStandardMaterial({
     color: '#4a6a3a',
     roughness: 0.85,
   });
-  for (let i = 0; i < 4; i++) {
-    const x = 6 + Math.random() * 7;
+  const berryMat = new THREE.MeshStandardMaterial({
+    color: '#c41e5a',
+    roughness: 0.4,
+    emissive: '#3a0010',
+    emissiveIntensity: 0.15,
+  });
+  for (let i = 0; i < 8; i++) {
+    const x = 5 + Math.random() * 9;
     const z = -5 + Math.random() * 10;
+    const bushGroup = new THREE.Group();
+    bushGroup.position.set(x, 0, z);
+    
+    // Green foliage base
     const bush = new THREE.Mesh(
-      new THREE.SphereGeometry(0.28, 6, 5),
+      new THREE.SphereGeometry(0.32, 8, 6),
       berryBushMat
     );
-    bush.position.set(x, 0.2, z);
-    bush.scale.set(1, 0.7, 1);
+    bush.position.y = 0.22;
+    bush.scale.set(1.1, 0.75, 1.1);
     bush.castShadow = true;
     bush.receiveShadow = true;
-    scene.add(bush);
+    bushGroup.add(bush);
+    
+    // Clustered red berries on top
+    for (let j = 0; j < 8; j++) {
+      const angle = (j / 8) * Math.PI * 2 + Math.random() * 0.3;
+      const radius = 0.15 + Math.random() * 0.15;
+      const berry = new THREE.Mesh(
+        new THREE.SphereGeometry(0.045, 6, 5),
+        berryMat
+      );
+      berry.position.set(
+        Math.cos(angle) * radius,
+        0.25 + Math.random() * 0.1,
+        Math.sin(angle) * radius
+      );
+      berry.castShadow = true;
+      bushGroup.add(berry);
+    }
+    
+    scene.add(bushGroup);
+    forageSources.push({
+      mesh: bushGroup,
+      type: 'berry',
+      harvestType: 'berry',
+      cooldown: 0,
+      cooldownMax: 8.0,
+      charges: 3,
+      chargesMax: 3,
+    });
+  }
+  
+  // Grain stalks (harvestable) - larger golden wheat patches
+  const grainMat = new THREE.MeshStandardMaterial({
+    color: '#e8b923',
+    roughness: 0.85,
+  });
+  const grainStalkMat = new THREE.MeshStandardMaterial({
+    color: '#c9a227',
+    roughness: 0.9,
+  });
+  for (let i = 0; i < 5; i++) {
+    const centerX = 4 + Math.random() * 8;
+    const centerZ = -4 + Math.random() * 8;
+    const patchGroup = new THREE.Group();
+    patchGroup.position.set(centerX, 0, centerZ);
+    
+    // Create a small wheat patch (cluster of stalks)
+    for (let j = 0; j < 10; j++) {
+      const offsetX = (Math.random() - 0.5) * 0.8;
+      const offsetZ = (Math.random() - 0.5) * 0.8;
+      const stalk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.03, 0.65, 5),
+        grainStalkMat
+      );
+      stalk.position.set(offsetX, 0.32, offsetZ);
+      stalk.castShadow = true;
+      patchGroup.add(stalk);
+      
+      // Golden grain head on top
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 5, 4),
+        grainMat
+      );
+      head.position.set(offsetX, 0.68, offsetZ);
+      head.scale.set(1, 1.3, 1);
+      head.castShadow = true;
+      patchGroup.add(head);
+    }
+    
+    scene.add(patchGroup);
+    forageSources.push({
+      mesh: patchGroup,
+      type: 'grain',
+      harvestType: 'grain',
+      cooldown: 0,
+      cooldownMax: 10.0,
+      charges: 2,
+      chargesMax: 2,
+    });
+  }
+  
+  // Mushroom clusters in meadow edges (harvestable food)
+  const mushroomCapMat = new THREE.MeshStandardMaterial({
+    color: '#d4745a',
+    roughness: 0.7,
+  });
+  const mushroomStemMat = new THREE.MeshStandardMaterial({
+    color: '#e8d8c4',
+    roughness: 0.8,
+  });
+  for (let i = 0; i < 4; i++) {
+    const x = 3 + Math.random() * 10;
+    const z = -6 + Math.random() * 12;
+    const cluster = new THREE.Group();
+    cluster.position.set(x, 0, z);
+    
+    for (let j = 0; j < 3; j++) {
+      const offsetX = (Math.random() - 0.5) * 0.3;
+      const offsetZ = (Math.random() - 0.5) * 0.3;
+      const size = 0.08 + Math.random() * 0.04;
+      
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(size * 0.4, size * 0.5, size * 2, 6),
+        mushroomStemMat
+      );
+      stem.position.set(offsetX, size, offsetZ);
+      stem.castShadow = true;
+      cluster.add(stem);
+      
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(size * 1.4, 8, 6),
+        mushroomCapMat
+      );
+      cap.position.set(offsetX, size * 2.2, offsetZ);
+      cap.scale.set(1, 0.6, 1);
+      cap.castShadow = true;
+      cluster.add(cap);
+    }
+    
+    scene.add(cluster);
+    forageSources.push({
+      mesh: cluster,
+      type: 'mushroom',
+      harvestType: 'berry', // Mushrooms yield berry equivalent
+      cooldown: 0,
+      cooldownMax: 12.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Rabbits
@@ -176,9 +315,18 @@ function createBiomes(scene) {
     foliage.receiveShadow = true;
     tree.add(foliage);
     scene.add(tree);
+    forageSources.push({
+      mesh: tree,
+      type: 'tree',
+      harvestType: 'wood',
+      cooldown: 0,
+      cooldownMax: 12.0,
+      charges: 3,
+      chargesMax: 3,
+    });
   }
   
-  // Logs
+  // Logs (harvestable)
   const logMat = new THREE.MeshStandardMaterial({
     color: '#6b4a2a',
     roughness: 0.95,
@@ -196,6 +344,15 @@ function createBiomes(scene) {
     log.castShadow = true;
     log.receiveShadow = true;
     scene.add(log);
+    forageSources.push({
+      mesh: log,
+      type: 'log',
+      harvestType: 'wood',
+      cooldown: 0,
+      cooldownMax: 8.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Deer
@@ -232,7 +389,7 @@ function createBiomes(scene) {
     });
   }
   
-  // Rocky (south): boulders, rocks
+  // Rocky (south): boulders, rocks (harvestable)
   const rockMat = new THREE.MeshStandardMaterial({
     color: '#7a7a7a',
     roughness: 0.98,
@@ -247,15 +404,25 @@ function createBiomes(scene) {
     const x = -6 + Math.random() * 12;
     const z = 7 + Math.random() * 8;
     const size = 0.3 + Math.random() * 0.6;
+    const isOre = Math.random() < 0.3;
     const rock = new THREE.Mesh(
       new THREE.DodecahedronGeometry(size, 0),
-      Math.random() < 0.3 ? oreMat : rockMat
+      isOre ? oreMat : rockMat
     );
     rock.position.set(x, size * 0.6, z);
     rock.rotation.set(Math.random(), Math.random(), Math.random());
     rock.castShadow = true;
     rock.receiveShadow = true;
     scene.add(rock);
+    forageSources.push({
+      mesh: rock,
+      type: isOre ? 'ore_rock' : 'stone_rock',
+      harvestType: isOre ? 'ore' : 'stone',
+      cooldown: 0,
+      cooldownMax: 15.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Water biome (north): pond, reeds, fish
@@ -295,29 +462,44 @@ function createBiomes(scene) {
     scene.add(reed);
   }
   
-  // Swimming fish
+  // Swimming fish (harvestable fauna) - more visible and colorful
   const fishMat = new THREE.MeshStandardMaterial({
     color: '#78a8c4',
     roughness: 0.5,
     metalness: 0.2,
   });
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2 + Math.random();
+  const fishAccentMat = new THREE.MeshStandardMaterial({
+    color: '#e89838',
+    roughness: 0.6,
+  });
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 + Math.random();
     const r = 2 + Math.random() * 2.5;
     const x = -2 + Math.cos(angle) * r;
     const z = -11 + Math.sin(angle) * r;
     const fish = new THREE.Group();
-    fish.position.set(x, 0.08, z);
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), fishMat);
+    fish.position.set(x, 0.12, z);
+    
+    // Larger, more visible body
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.32, 4, 8), fishMat);
     body.rotation.z = Math.PI / 2;
     fish.add(body);
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.15, 5), fishMat);
+    
+    // Orange/yellow tail for visibility
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.18, 5), fishAccentMat);
     tail.rotation.z = -Math.PI / 2;
-    tail.position.x = -0.2;
+    tail.position.x = -0.25;
     fish.add(tail);
+    
+    // Dorsal fin
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.12, 4), fishAccentMat);
+    fin.position.y = 0.12;
+    fin.rotation.x = Math.PI;
+    fish.add(fin);
+    
     fish.castShadow = true;
     scene.add(fish);
-    fauna.push({
+    const fishFauna = {
       mesh: fish,
       biome: 'water',
       bounds: { minX: -7, maxX: 3, minZ: -16, maxZ: -6 },
@@ -325,10 +507,21 @@ function createBiomes(scene) {
       dir: Math.random() * Math.PI * 2,
       hopPhase: 0,
       swimPhase: Math.random() * Math.PI * 2,
+    };
+    fauna.push(fishFauna);
+    forageSources.push({
+      mesh: fish,
+      type: 'fish',
+      harvestType: 'fish',
+      cooldown: 0,
+      cooldownMax: 20.0,
+      charges: 1,
+      chargesMax: 1,
+      fauna: fishFauna,
     });
   }
   
-  return { fauna };
+  return { fauna, forageSources };
 }
 
 export function createWorld(canvas) {
@@ -408,6 +601,7 @@ export function createWorld(canvas) {
   const pickups = [];
   const buildings = [];
   const fauna = biomes.fauna;
+  const forageSources = biomes.forageSources;
 
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -425,6 +619,7 @@ export function createWorld(canvas) {
     pickups,
     buildings,
     fauna,
+    forageSources,
     sun,
     render() {
       renderer.render(scene, camera);

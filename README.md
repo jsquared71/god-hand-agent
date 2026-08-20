@@ -90,6 +90,21 @@ The world contains four distinct biomes around the spawn point:
 
 Flora and fauna are mostly decorative with some harvestable pickups (e.g., fish in the pond).
 
+## Foraging
+
+The agent can forage food and materials directly from biome sources instead of relying only on player-dropped pickups:
+
+- **Berry bushes** (meadow) yield berries — green bushes with clusters of visible red berries
+- **Grain patches** (meadow) yield grain — golden wheat stalks in small patches
+- **Mushroom clusters** (meadow edges) yield food — orange-capped mushrooms
+- **Trees and logs** (forest) yield wood
+- **Stone boulders and ore rocks** (rocky) yield stone or ore
+- **Swimming fish** (pond) yield fish — blue and orange fish swimming in the water
+
+When hungry or short on materials, the agent will walk to the nearest harvestable source, perform a brief gathering animation, and collect the resource. Forage sources have charges and cooldowns—they don't vanish immediately but regenerate after being depleted, keeping the world sustainable. The agent seamlessly chooses between foraged sources and player-dropped pickups based on proximity and need.
+
+Food sources are visually distinct and recognizable: berry bushes have red berries, grain patches are golden, mushrooms have orange caps, and fish are colorful and visible in the pond. A few food pickups spawn on the ground at world start so food is immediately visible.
+
 ## Agent brain
 
 Plain JS MLP — **no TensorFlow**.
@@ -109,6 +124,32 @@ The loader tries `public/assets/glb/<id>.glb` via `GLTFLoader`. On 404 it uses t
 Ids: `agent`, `berry`, `grain`, `wood`, `stone`, `ore`, `water`, `planks`, `ingot`, `bread`, `stew`, `dough`, `fish`, `cooked_fish`, `sticks`, `hut`, `workbench`, `fire`, `well`, `chest`.
 
 See `public/assets/glb/README.md` for Meshy Smart Topology export notes. Drop files in and refresh — no code rewrite.
+
+## Save & Load
+
+The game includes a full save/load system to preserve your world and the agent's learned behavior.
+
+### Saving
+- Click the **Save** button in the HUD (top-left panel)
+- A file save dialog will open (or download will start)
+- Saves to `god-hand-save-<timestamp>.json`
+- Keyboard shortcut: `Ctrl+S`
+- **Autosave**: Every 15 seconds to localStorage (survives page refresh)
+
+### Loading
+- Click the **Load** button in the HUD
+- Select a previously saved `.json` file
+- World state is instantly restored
+
+### What's Saved
+- Agent position, stats (hunger, energy), inventory, and brain weights (learned behavior)
+- All dropped pickups (type + position)
+- All built structures (hut, fire, workbench, well, chest)
+- Forage source charges and cooldowns
+- Camera position
+- Format version for future compatibility
+
+On page load, if an autosave exists in localStorage, you'll be prompted to restore it. Otherwise, the world starts fresh with a few food pickups scattered on the ground.
 
 ## Stack
 

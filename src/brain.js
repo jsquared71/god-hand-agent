@@ -65,8 +65,8 @@ function sample(probs) {
   return probs.length - 1;
 }
 
-export function shouldForceIdle({ pickupCount, inventoryEmpty, hasHut, hasWorkbench, hasTools }) {
-  return pickupCount === 0 && inventoryEmpty && !hasHut && !hasWorkbench && !hasTools;
+export function shouldForceIdle({ pickupCount, inventoryEmpty, hasHut, hasWorkbench, hasTools, hasForageSources }) {
+  return pickupCount === 0 && inventoryEmpty && !hasHut && !hasWorkbench && !hasTools && !hasForageSources;
 }
 
 export class Brain {
@@ -187,9 +187,19 @@ export function encodeInputs({
   hasWorkbench,
   hasTools,
   starving,
+  distForageFood = Infinity,
+  distForageWood = Infinity,
+  distForageOre = Infinity,
+  distForageStone = Infinity,
 }) {
   const inv = (k) => Math.min(1, (inventory[k] || 0) / 4);
   const nd = (d) => (d == null || d === Infinity ? 0 : 1 / (1 + d));
+  // Combine pickup and forage distances (use closer of the two)
+  const foodDist = Math.min(distFood, distForageFood);
+  const woodDist = Math.min(distWood, distForageWood);
+  const oreDist = Math.min(distOre, distForageOre);
+  const stoneDist = Math.min(distStone, distForageStone);
+  
   return [
     hunger,
     energy,
@@ -201,10 +211,10 @@ export function encodeInputs({
     inv('planks'),
     inv('ingot'),
     inv('bread'),
-    nd(distFood),
-    nd(distWood),
-    nd(distOre),
-    nd(distStone),
+    nd(foodDist),
+    nd(woodDist),
+    nd(oreDist),
+    nd(stoneDist),
     nd(distGrain),
     nd(distWorkbench),
     nd(distHut),

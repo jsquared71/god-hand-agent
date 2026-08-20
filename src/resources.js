@@ -95,6 +95,35 @@ export function updateWorldItems(world, dt) {
     }
   }
   
+  // Update forage sources cooldowns
+  if (world.forageSources) {
+    for (const source of world.forageSources) {
+      if (source.cooldown > 0) {
+        source.cooldown = Math.max(0, source.cooldown - dt);
+        // Visual feedback: dim when depleted
+        if (source.charges === 0) {
+          const alpha = 0.4 + 0.3 * (1 - source.cooldown / source.cooldownMax);
+          source.mesh.traverse((child) => {
+            if (child.material) {
+              child.material.opacity = alpha;
+              child.material.transparent = true;
+            }
+          });
+        }
+        // Recharge
+        if (source.cooldown === 0 && source.charges < source.chargesMax) {
+          source.charges = source.chargesMax;
+          source.mesh.traverse((child) => {
+            if (child.material) {
+              child.material.opacity = 1.0;
+              child.material.transparent = false;
+            }
+          });
+        }
+      }
+    }
+  }
+  
   // Animate fauna
   if (world.fauna) {
     for (const creature of world.fauna) {
@@ -158,4 +187,38 @@ export function nearestBuilding(world, origin, type) {
     }
   }
   return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
+}
+
+export function nearestForageSource(world, origin, harvestTypes) {
+  if (!world.forageSources) return { item: null, dist: Infinity };
+  let best = null;
+  let bestD = Infinity;
+  const ox = origin.x;
+  const oz = origin.z;
+  for (const source of world.forageSources) {
+    if (harvestTypes && !harvestTypes.includes(source.harvestType)) continue;
+    if (source.charges <= 0) continue;
+    const dx = source.mesh.position.x - ox;
+    const dz = source.mesh.position.z - oz;
+    const d = Math.hypot(dx, dz);
+    if (d < bestD) {
+      bestD = d;
+      best = source;
+    }
+  }
+  return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
+}
+
+export function harvestForageSource(world, assets, source, agentPos) {
+  if (!source || source.charges <= 0) return null;
+  source.charges -= 1;
+  if (source.charges === 0) {
+    source.cooldown = source.cooldownMax;
+  }
+  // Spawn pickup at agent's feet
+  spawnPickup(world, assets, source.harvestType, {
+    x: agentPos.x,
+    z: agentPos.z,
+  }, { falling: false });
+  return source.harvestType;
 }

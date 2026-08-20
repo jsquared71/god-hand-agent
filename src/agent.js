@@ -24,10 +24,11 @@ import {
   emptyInventory,
   ALL_ITEM_TYPES,
 } from './recipes.js';
-import { nearestPickup, nearestBuilding, removePickup, spawnBuilding } from './resources.js';
+import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
 
 const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
 const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain', 'water', 'fish', 'dough', 'sticks'];
+const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
 
 export function createAgent(world, assets) {
@@ -87,6 +88,12 @@ export function createAgent(world, assets) {
     const grain = nearestPickup(world, group.position, ['grain']);
     const wb = nearestBuilding(world, group.position, 'workbench');
     const hut = nearestBuilding(world, group.position, 'hut');
+    
+    const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish', 'mushroom']);
+    const forageWood = nearestForageSource(world, group.position, ['wood']);
+    const forageOre = nearestForageSource(world, group.position, ['ore']);
+    const forageStone = nearestForageSource(world, group.position, ['stone']);
+    
     return {
       food,
       wood,
@@ -95,8 +102,13 @@ export function createAgent(world, assets) {
       grain,
       wb,
       hut,
+      forageFood,
+      forageWood,
+      forageOre,
+      forageStone,
       hasHut: world.buildings.some((b) => b.type === 'hut'),
       hasWorkbench: world.buildings.some((b) => b.type === 'workbench'),
+      hasForageSources: world.forageSources && world.forageSources.some((s) => s.charges > 0),
     };
   }
 
@@ -109,6 +121,7 @@ export function createAgent(world, assets) {
       hasHut: s.hasHut,
       hasWorkbench: s.hasWorkbench,
       hasTools: state.hasTools,
+      hasForageSources: s.hasForageSources,
     });
 
     if (force) {
@@ -142,26 +155,33 @@ export function createAgent(world, assets) {
       hasWorkbench: s.hasWorkbench,
       hasTools: state.hasTools,
       starving: state.hunger < 0.18,
+      distForageFood: s.forageFood.dist,
+      distForageWood: s.forageWood.dist,
+      distForageOre: s.forageOre.dist,
+      distForageStone: s.forageStone.dist,
     });
 
     const { action, name } = brain.act(input);
     state.actionIndex = action;
     state.action = name;
 
-    let shape = (state.hunger - 0.5) * 0.06;
-    if (name === 'seek_food' && s.food.item && state.hunger < 0.7) shape += 0.04;
-    if (name === 'idle' && state.hunger < 0.3 && s.food.item) shape -= 0.12;
+    let shape = (state.hunger - 0.5) * 0.08;
+    if (state.hunger < 0.3) shape -= 0.15; // Strong penalty for being very hungry and not seeking food
+    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger < 0.7) shape += 0.08;
+    if (name === 'idle' && state.hunger < 0.3 && (s.food.item || s.forageFood.item)) shape -= 0.18;
     if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
-    if (name === 'seek_material' && s.wood.item) shape += 0.02;
+    if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
+    if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
   }
 
   function hasAnyFood(s) {
     return (
       FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
-      !!(s && s.food.item)
+      !!(s && s.food.item) ||
+      !!(s && s.forageFood.item)
     );
   }
 
@@ -261,6 +281,10 @@ export function createAgent(world, assets) {
     state.busy = { kind: 'build', t: 0, dur: rec.time, what };
   }
 
+  function startForage(source) {
+    state.busy = { kind: 'forage', t: 0, dur: 1.2, source };
+  }
+
   function finishBusy() {
     const b = state.busy;
     state.busy = null;
@@ -304,6 +328,11 @@ export function createAgent(world, assets) {
         });
       }
       brain.reinforce(1.15);
+    } else if (b.kind === 'forage') {
+      const harvested = harvestForageSource(world, assets, b.source, group.position);
+      if (harvested) {
+        brain.reinforce(0.6);
+      }
     }
   }
 
@@ -334,17 +363,30 @@ export function createAgent(world, assets) {
 
     if (actName === 'seek_food') {
       const food = s.food.item;
-      if (!food) {
+      const forageFood = s.forageFood.item;
+      
+      // Choose closer option: pickup or forage source
+      const useForage = !food || (forageFood && s.forageFood.dist < s.food.dist);
+      
+      if (useForage && forageFood) {
+        const remain = walkToward(forageFood.mesh.position.x, forageFood.mesh.position.z, dt, speed);
+        if (remain < FORAGE_RADIUS) {
+          startForage(forageFood);
+          return false;
+        }
+        return true;
+      } else if (food) {
+        const remain = walkToward(food.mesh.position.x, food.mesh.position.z, dt, speed);
+        if (remain < PICKUP_RADIUS) {
+          startEat(food.type, food);
+          return false;
+        }
+        return true;
+      } else {
         const inv = bestInvFood();
         if (inv) startEat(inv, null);
         return false;
       }
-      const remain = walkToward(food.mesh.position.x, food.mesh.position.z, dt, speed);
-      if (remain < PICKUP_RADIUS) {
-        startEat(food.type, food);
-        return false;
-      }
-      return true;
     }
 
     if (actName === 'eat') {
@@ -367,22 +409,92 @@ export function createAgent(world, assets) {
       if (state.hunger > 0.35) targets.push('grain');
       targets.push('wood', 'ore', 'stone', 'planks', 'ingot');
       const n = nearestPickup(world, group.position, targets);
-      if (!n.item) {
+      
+      // Check forage sources for materials
+      const forageWood = s.forageWood.item;
+      const forageOre = s.forageOre.item;
+      const forageStone = s.forageStone.item;
+      
+      // Find best option (pickup or forage)
+      let bestTarget = null;
+      let bestDist = Infinity;
+      let isForage = false;
+      
+      if (n.item && n.dist < bestDist) {
+        bestTarget = n.item;
+        bestDist = n.dist;
+        isForage = false;
+      }
+      if (forageWood && s.forageWood.dist < bestDist) {
+        bestTarget = forageWood;
+        bestDist = s.forageWood.dist;
+        isForage = true;
+      }
+      if (forageOre && s.forageOre.dist < bestDist) {
+        bestTarget = forageOre;
+        bestDist = s.forageOre.dist;
+        isForage = true;
+      }
+      if (forageStone && s.forageStone.dist < bestDist) {
+        bestTarget = forageStone;
+        bestDist = s.forageStone.dist;
+        isForage = true;
+      }
+      
+      if (!bestTarget) {
         brain.reinforce(-0.03);
         return false;
       }
-      const remain = walkToward(n.item.mesh.position.x, n.item.mesh.position.z, dt, speed);
-      if (remain < PICKUP_RADIUS) pickupIfClose([n.item.type]);
-      return remain >= PICKUP_RADIUS;
+      
+      const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+      if (isForage) {
+        if (remain < FORAGE_RADIUS) startForage(bestTarget);
+      } else {
+        if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
+      }
+      return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
     }
 
     if (actName === 'process') {
       if (!canProcessAny()) {
         const n = nearestPickup(world, group.position, ['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
-        if (n.item) {
-          const remain = walkToward(n.item.mesh.position.x, n.item.mesh.position.z, dt, speed);
-          if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
-          return remain >= PICKUP_RADIUS;
+        const forageWood = s.forageWood.item;
+        const forageGrain = nearestForageSource(world, group.position, ['grain']).item;
+        const forageFood = s.forageFood.item;
+        
+        let bestTarget = null;
+        let bestDist = Infinity;
+        let isForage = false;
+        
+        if (n.item && n.dist < bestDist) {
+          bestTarget = n.item;
+          bestDist = n.dist;
+          isForage = false;
+        }
+        if (forageWood && s.forageWood.dist < bestDist) {
+          bestTarget = forageWood;
+          bestDist = s.forageWood.dist;
+          isForage = true;
+        }
+        if (forageGrain && nearestForageSource(world, group.position, ['grain']).dist < bestDist) {
+          bestTarget = forageGrain;
+          bestDist = nearestForageSource(world, group.position, ['grain']).dist;
+          isForage = true;
+        }
+        if (forageFood && s.forageFood.dist < bestDist) {
+          bestTarget = forageFood;
+          bestDist = s.forageFood.dist;
+          isForage = true;
+        }
+        
+        if (bestTarget) {
+          const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+          if (isForage) {
+            if (remain < FORAGE_RADIUS) startForage(bestTarget);
+          } else {
+            if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
+          }
+          return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
         }
         brain.reinforce(-0.04);
         return false;
@@ -410,11 +522,52 @@ export function createAgent(world, assets) {
         else if (!world.buildings.some((b) => b.type === 'well')) need.push('stone', 'planks');
         else if (!world.buildings.some((b) => b.type === 'chest')) need.push('wood', 'planks');
         else if (!state.hasTools) need.push('ore', 'ingot');
+        
         const n = nearestPickup(world, group.position, need.length ? need : MATERIAL_TYPES);
-        if (n.item) {
-          const remain = walkToward(n.item.mesh.position.x, n.item.mesh.position.z, dt, speed);
-          if (remain < PICKUP_RADIUS) pickupIfClose([n.item.type]);
-          return remain >= PICKUP_RADIUS;
+        
+        // Check forage sources for needed materials
+        let bestTarget = null;
+        let bestDist = Infinity;
+        let isForage = false;
+        
+        if (n.item && n.dist < bestDist) {
+          bestTarget = n.item;
+          bestDist = n.dist;
+          isForage = false;
+        }
+        if (need.includes('wood') || need.length === 0) {
+          const forageWood = s.forageWood.item;
+          if (forageWood && s.forageWood.dist < bestDist) {
+            bestTarget = forageWood;
+            bestDist = s.forageWood.dist;
+            isForage = true;
+          }
+        }
+        if (need.includes('stone') || need.length === 0) {
+          const forageStone = s.forageStone.item;
+          if (forageStone && s.forageStone.dist < bestDist) {
+            bestTarget = forageStone;
+            bestDist = s.forageStone.dist;
+            isForage = true;
+          }
+        }
+        if (need.includes('ore') || need.length === 0) {
+          const forageOre = s.forageOre.item;
+          if (forageOre && s.forageOre.dist < bestDist) {
+            bestTarget = forageOre;
+            bestDist = s.forageOre.dist;
+            isForage = true;
+          }
+        }
+        
+        if (bestTarget) {
+          const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+          if (isForage) {
+            if (remain < FORAGE_RADIUS) startForage(bestTarget);
+          } else {
+            if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
+          }
+          return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
         }
         brain.reinforce(-0.04);
         return false;
@@ -441,7 +594,9 @@ export function createAgent(world, assets) {
             ? 'Crafting'
             : state.busy?.kind === 'build'
               ? 'Building'
-              : ACTION_LABELS[state.action] || 'Idle';
+              : state.busy?.kind === 'forage'
+                ? 'Gathering'
+                : ACTION_LABELS[state.action] || 'Idle';
       hud.action.textContent = busyBit;
     }
     if (hud.inv) {

@@ -182,6 +182,48 @@ body::after {
   opacity: 0.35;
 }
 
+.hud-save-load {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.save-load-btn {
+  flex: 1;
+  appearance: none;
+  border: 1px solid rgba(212, 160, 23, 0.3);
+  background: linear-gradient(180deg, rgba(212, 160, 23, 0.15), rgba(212, 160, 23, 0.05));
+  color: var(--accent);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font);
+  transition: all 0.15s ease;
+}
+
+.save-load-btn:hover {
+  border-color: rgba(212, 160, 23, 0.6);
+  background: linear-gradient(180deg, rgba(212, 160, 23, 0.25), rgba(212, 160, 23, 0.12));
+  transform: translateY(-1px);
+}
+
+.save-load-btn:active {
+  transform: translateY(0);
+  background: linear-gradient(180deg, rgba(212, 160, 23, 0.1), rgba(212, 160, 23, 0.08));
+}
+
+.save-load-btn svg {
+  flex-shrink: 0;
+}
+
 #toolbar {
   position: fixed;
   left: 50%;

@@ -43,6 +43,7 @@ const emptyGate = shouldForceIdle({
   hasHut: false,
   hasWorkbench: false,
   hasTools: false,
+  hasForageSources: false,
 });
 assert(emptyGate === true, 'empty world forces idle');
 
@@ -52,6 +53,7 @@ const notEmpty = shouldForceIdle({
   hasHut: false,
   hasWorkbench: false,
   hasTools: false,
+  hasForageSources: false,
 });
 assert(notEmpty === false, 'a pickup un-gates the net');
 
@@ -61,8 +63,19 @@ const built = shouldForceIdle({
   hasHut: true,
   hasWorkbench: false,
   hasTools: false,
+  hasForageSources: false,
 });
 assert(built === false, 'a hut un-gates the net');
+
+const withForage = shouldForceIdle({
+  pickupCount: 0,
+  inventoryEmpty: true,
+  hasHut: false,
+  hasWorkbench: false,
+  hasTools: false,
+  hasForageSources: true,
+});
+assert(withForage === false, 'forage sources un-gate the net');
 
 const inv = {
   berry: 0, grain: 0, wood: 0, stone: 0, ore: 0, planks: 0, ingot: 0, bread: 0,

@@ -70,7 +70,7 @@ export function shouldForceIdle({ pickupCount, inventoryEmpty, hasHut, hasWorkbe
 }
 
 export class Brain {
-  constructor() {
+  constructor(priors = null) {
     this.inputSize = INPUT_SIZE;
     this.hiddenSize = HIDDEN_SIZE;
     this.outputSize = OUTPUT_SIZE;
@@ -80,13 +80,26 @@ export class Brain {
     this.b1 = zeros(HIDDEN_SIZE);
     this.W2 = randn(OUTPUT_SIZE, HIDDEN_SIZE, s2);
     this.b2 = zeros(OUTPUT_SIZE);
-    // Mild priors so the first minutes aren't pure noise.
-    this.b2[0] = 0.15; // idle
-    this.b2[1] = 0.15; // seek_food (lowered from 0.35 to reduce eager eating)
-    this.b2[2] = 0.05; // eat (lowered from 0.1)
-    this.b2[3] = 0.35; // seek_material (raised to prioritize gathering)
-    this.b2[4] = 0.08; // process (raised slightly)
-    this.b2[5] = -0.05; // build
+    
+    // Apply priors (for multiple agents with different biases)
+    if (priors) {
+      if (priors.b2) {
+        for (let i = 0; i < OUTPUT_SIZE; i++) {
+          if (priors.b2[i] !== undefined) {
+            this.b2[i] = priors.b2[i];
+          }
+        }
+      }
+    } else {
+      // Default priors so the first minutes aren't pure noise.
+      this.b2[0] = 0.15; // idle
+      this.b2[1] = 0.15; // seek_food (lowered from 0.35 to reduce eager eating)
+      this.b2[2] = 0.05; // eat (lowered from 0.1)
+      this.b2[3] = 0.35; // seek_material (raised to prioritize gathering)
+      this.b2[4] = 0.08; // process (raised slightly)
+      this.b2[5] = -0.05; // build
+    }
+    
     this.last = null;
     this.lr = 0.018;
   }

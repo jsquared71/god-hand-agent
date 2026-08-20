@@ -1,8 +1,8 @@
 # God Hand — Agent Sandbox
 
-A Three.js god-hand sandbox. You never steer the creature. You drop raw resources from a toolbar; a tiny neural-net agent eats, crafts, and builds with whatever you give it.
+A Three.js god-hand sandbox. You never steer the creatures. You drop raw resources from a toolbar using **Favor**; two tiny neural-net agents eat, craft, and build with whatever you give them.
 
-The world starts **empty**. If nothing has been dropped, the inventory is empty, and nothing has been built, the brain is skipped and the agent stays idle.
+The world starts **empty**. If nothing has been dropped, the inventory is empty, and nothing has been built, the brain is skipped and agents stay idle.
 
 ## Run
 
@@ -25,6 +25,83 @@ Headless brain check (no browser):
 ```bash
 npm run brain-check
 ```
+
+## Gameplay
+
+### Day & Night Cycle
+
+A full day lasts **4-5 minutes** real time (70% day, 30% night). Watch the sky shift from warm daylight through dusk to dark night with moonlight. At night:
+
+- **Cold penalizes unprotected agents**: Hunger drains 3× faster if agents are not near a **hut** or a lit **campfire**
+- **Survival strategy**: Build a hut and campfire to keep your settlers warm and fed through the night
+- The campfire emits real light that illuminates the world at night
+
+The day/night cycle creates a rhythm: gather and build during the day, survive the cold nights with shelter and fire.
+
+### Favor System
+
+Player drops cost **Favor** — your divine intervention has limits:
+
+- Start with **10 Favor**, maximum 20
+- Each toolbar drop (berry, grain, wood, stone, ore, water) costs **1 Favor**
+- Favor regenerates slowly over time
+- **Bonus regeneration** when your camp is thriving:
+  - Agents are well-fed (hunger > 75%)
+  - Hut is built
+  - Tools have been crafted
+  - Chest pantry is stocked
+
+If Favor reaches 0, you cannot drop more resources until it regenerates. Plan your offerings wisely!
+
+### Camp Status
+
+The HUD shows four camp indicators:
+
+- **Fed**: All agents have hunger > 75%
+- **Housed**: A hut has been built (provides warmth at night)
+- **Tooled**: Agents have crafted tools (faster gathering)
+- **Stocked**: The chest pantry contains food
+
+These indicators turn green when active and boost Favor regeneration.
+
+### Two Settlers
+
+Two agents inhabit the world, each with independent:
+
+- Neural network brains with slightly different action priors (one more builder-biased, one more forager-biased)
+- Hunger, energy, and inventory
+- Learned behavior through REINFORCE weight updates
+
+Both agents share the camp's buildings and work together to survive. Watch their **want bubbles** to see what each agent is thinking:
+
+- **Hungry** — needs food
+- **Cold** — unprotected at night
+- **Wants workbench** — planning to build
+- **Wants hut** — seeking shelter
+- **Wants tools** — ready to craft tools
+- **Gathering** — collecting materials
+- **Crafting** — processing items
+- **Building** — constructing a structure
+- **Content** — well-fed and satisfied
+
+### Chest Pantry
+
+The chest is no longer just decoration. When built, agents:
+
+- **Deposit** extra food (berry, grain, bread, stew, fish, cooked fish, water) into the chest instead of hoarding it
+- **Withdraw** food from the chest when their own hunger drops to ≤75%
+
+A stocked chest contributes to camp thriving and Favor regeneration. Think of it as a shared pantry for the colony.
+
+### Audio Feedback
+
+Simple, tasteful sounds using WebAudio oscillators (no external audio files):
+
+- **Footsteps** — soft ticks when agents walk
+- **Gathering** — chop/spark when harvesting
+- **Building completes** — small chime
+- **Fire crackle** — quiet ambient loop when a campfire exists
+- **Nightfall** — ambient sound when night begins
 
 ## Mouse mapping
 
@@ -119,7 +196,9 @@ Plain JS MLP — **no TensorFlow**.
 - Empty world + empty inventory + nothing built → force idle, skip the net
 - Session-only REINFORCE weight nudges: +eat, −starve, +successful craft/build
 - Hunger drains over time. At 0 the agent gets sluggish and collapses to an idle-hungry wait. No game-over screen.
+- **Cold at night**: Hunger drains 3× faster if the agent is not near a hut or campfire
 - **Agent only seeks/eats food when hunger ≤ 75%** — when above 75%, it prioritizes gathering materials, crafting, and building instead of eating.
+- **Two settlers** with slightly different action priors: one more builder-focused, one more forager-focused
 - **World resources regenerate slowly** — forage sources (bushes, trees, rocks, fish) regain charges one at a time after harvest, and initial ground pickups respawn at their origin after collection. Player-dropped items do not regenerate.
 
 ## Swap in Meshy GLBs
@@ -132,7 +211,7 @@ See `public/assets/glb/README.md` for Meshy Smart Topology export notes. Drop fi
 
 ## Save & Load
 
-The game includes a full save/load system to preserve your world and the agent's learned behavior.
+The game includes a full save/load system to preserve your world and the agents' learned behavior.
 
 ### Saving
 - Click the **Save** button in the HUD (top-left panel)
@@ -147,12 +226,15 @@ The game includes a full save/load system to preserve your world and the agent's
 - World state is instantly restored
 
 ### What's Saved
-- Agent position, stats (hunger, energy), inventory, and brain weights (learned behavior)
+- Both agents' positions, stats (hunger, energy), inventories, and brain weights (learned behavior)
 - All dropped pickups (type + position)
 - All built structures (hut, fire, workbench, well, chest)
 - Forage source charges and cooldowns
 - Camera position
 - World seed (for consistent world layout on reload)
+- Day/night cycle (time of day, day index)
+- Favor amount and game state
+- Chest pantry contents
 - Format version for future compatibility
 
 On page load, if an autosave exists in localStorage, you'll be prompted to restore it. Otherwise, the world starts fresh with a few food pickups scattered on the ground.

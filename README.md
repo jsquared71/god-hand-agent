@@ -94,13 +94,16 @@ Flora and fauna are mostly decorative with some harvestable pickups (e.g., fish 
 
 The agent can forage food and materials directly from biome sources instead of relying only on player-dropped pickups:
 
-- **Berry bushes** (meadow) yield berries
-- **Grain stalks** (meadow) yield grain
+- **Berry bushes** (meadow) yield berries — green bushes with clusters of visible red berries
+- **Grain patches** (meadow) yield grain — golden wheat stalks in small patches
+- **Mushroom clusters** (meadow edges) yield food — orange-capped mushrooms
 - **Trees and logs** (forest) yield wood
 - **Stone boulders and ore rocks** (rocky) yield stone or ore
-- **Swimming fish** (pond) yield fish
+- **Swimming fish** (pond) yield fish — blue and orange fish swimming in the water
 
 When hungry or short on materials, the agent will walk to the nearest harvestable source, perform a brief gathering animation, and collect the resource. Forage sources have charges and cooldowns—they don't vanish immediately but regenerate after being depleted, keeping the world sustainable. The agent seamlessly chooses between foraged sources and player-dropped pickups based on proximity and need.
+
+Food sources are visually distinct and recognizable: berry bushes have red berries, grain patches are golden, mushrooms have orange caps, and fish are colorful and visible in the pond. A few food pickups spawn on the ground at world start so food is immediately visible.
 
 ## Agent brain
 

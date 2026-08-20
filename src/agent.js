@@ -89,7 +89,7 @@ export function createAgent(world, assets) {
     const wb = nearestBuilding(world, group.position, 'workbench');
     const hut = nearestBuilding(world, group.position, 'hut');
     
-    const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish']);
+    const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish', 'mushroom']);
     const forageWood = nearestForageSource(world, group.position, ['wood']);
     const forageOre = nearestForageSource(world, group.position, ['ore']);
     const forageStone = nearestForageSource(world, group.position, ['stone']);

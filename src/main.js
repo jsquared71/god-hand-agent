@@ -22,6 +22,14 @@ const drop = setupDrop(world, assets, cam);
 setupToolbar(drop);
 setupRecipeHud();
 
+// Scatter some initial food pickups so food is visible on the ground
+spawnPickup(world, assets, 'berry', { x: 7, z: 2 }, { falling: false });
+spawnPickup(world, assets, 'berry', { x: 9, z: -3 }, { falling: false });
+spawnPickup(world, assets, 'grain', { x: 5, z: 1 }, { falling: false });
+spawnPickup(world, assets, 'grain', { x: 8, z: -1 }, { falling: false });
+spawnPickup(world, assets, 'fish', { x: -1, z: -9 }, { falling: false });
+spawnPickup(world, assets, 'fish', { x: -3, z: -13 }, { falling: false });
+
 let last = performance.now();
 
 function frame(now) {

@@ -33,7 +33,7 @@ const THINK_DT = 0.28;
 const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
 const MATERIAL_TYPES = ['wood', 'ore', 'stone', 'planks', 'ingot', 'grain'];
 
-export function createAgent(world, assets, priors = null, notebook = null) {
+export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
   const group = assets.create('agent');
   group.position.set(0, 2.4, 0);
   world.scene.add(group);
@@ -42,6 +42,7 @@ export function createAgent(world, assets, priors = null, notebook = null) {
   const brain = new Brain(priors);
 
   const state = {
+    name,
     hunger: 0.62,
     energy: 1,
     inventory: emptyInventory(),
@@ -812,21 +813,7 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
     if (hud.energyVal) hud.energyVal.textContent = `${e}%`;
-    if (hud.action) {
-      const busyBit =
-        state.busy?.kind === 'eat'
-          ? 'Eating'
-          : state.busy?.kind === 'process'
-            ? 'Crafting'
-            : state.busy?.kind === 'build'
-              ? 'Building'
-              : state.busy?.kind === 'combine'
-                ? 'Inventing'
-                : state.busy?.kind === 'forage'
-                  ? 'Gathering'
-                  : ACTION_LABELS[state.action] || 'Idle';
-      hud.action.textContent = busyBit;
-    }
+    // Brain action is now updated centrally in main.js to show all agents
     if (hud.inv) {
       const bits = ALL_ITEM_TYPES.map((t) => {
         const n = state.inventory[t] || 0;

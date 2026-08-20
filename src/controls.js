@@ -28,7 +28,7 @@ export function setupControls(world) {
 
   let dragLock = false;
 
-  return {
+  const api = {
     controls,
     update() {
       if (!dragLock && controls.enabled) controls.update();
@@ -42,4 +42,11 @@ export function setupControls(world) {
       controls.enableDamping = !active;
     },
   };
+
+  // Reset drag lock on global pointer events to prevent stuck camera
+  window.addEventListener('pointerup', () => api.setResourceDrag(false));
+  window.addEventListener('pointercancel', () => api.setResourceDrag(false));
+  window.addEventListener('blur', () => api.setResourceDrag(false));
+
+  return api;
 }

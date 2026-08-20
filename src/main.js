@@ -45,12 +45,12 @@ const notebook = new DiscoveryNotebook();
 // Create two agents with slightly different priors
 const agent1 = createAgent(world, assets, {
   b2: [0.15, 0.1, 0.05, 0.35, 0.08, -0.05, 0.12], // Slightly more builder-biased, with combine
-}, notebook);
+}, notebook, 'Ava');
 agent1.group.position.set(0, 2.4, 0);
 
 const agent2 = createAgent(world, assets, {
   b2: [0.1, 0.15, 0.08, 0.4, 0.05, -0.1, 0.15], // More forager-biased, more experimental
-}, notebook);
+}, notebook, 'Bo');
 agent2.group.position.set(1.5, 2.4, 0.8);
 
 const agents = [agent1, agent2];
@@ -226,6 +226,41 @@ startAutosave(world, agents, world.camera, gameState, notebook);
 let last = performance.now();
 let frameErrorLogged = false;
 
+function updateMindStatus() {
+  const brainAction = document.getElementById('brain-action');
+  if (!brainAction) return;
+  
+  const statuses = agents.map(agent => {
+    const state = agent.state;
+    const busy = state.busy?.kind === 'eat'
+      ? 'Eating'
+      : state.busy?.kind === 'process'
+        ? 'Crafting'
+        : state.busy?.kind === 'build'
+          ? 'Building'
+          : state.busy?.kind === 'combine'
+            ? 'Inventing'
+            : state.busy?.kind === 'forage'
+              ? 'Gathering'
+              : state.action === 'seek_food'
+                ? 'Seeking food'
+                : state.action === 'seek_material'
+                  ? 'Gathering'
+                  : state.action === 'idle-hungry'
+                    ? 'Starving'
+                    : state.action === 'process'
+                      ? 'Crafting'
+                      : state.action === 'build'
+                        ? 'Building'
+                        : state.action === 'combine'
+                          ? 'Inventing'
+                          : 'Idle';
+    return `${state.name} ${busy}`;
+  });
+  
+  brainAction.textContent = statuses.join(' · ');
+}
+
 function updateFavor(dt) {
   // Base regen
   let regen = gameState.favorRegenRate * dt;
@@ -286,13 +321,20 @@ function frame(now) {
     }
     
     for (const agent of agents) {
-      agent.update(dt);
+      try {
+        agent.update(dt);
+      } catch (agentError) {
+        console.error('Agent update error:', agentError);
+      }
     }
     
     // Update recipe HUD periodically (every ~60 frames)
     if (Math.random() < 0.016) {
       updateRecipeHud(notebook);
     }
+    
+    // Update combined Mind status for all agents
+    updateMindStatus();
     
     world.render();
   } catch (error) {

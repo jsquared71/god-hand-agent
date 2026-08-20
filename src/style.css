@@ -62,6 +62,7 @@ body::after {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .hud-brand {
@@ -211,6 +212,7 @@ body::after {
   text-transform: uppercase;
   font-family: var(--font);
   transition: all 0.15s ease;
+  pointer-events: auto;
 }
 
 .save-load-btn:hover {
@@ -235,7 +237,7 @@ body::after {
   transform: translateX(-50%);
   z-index: 6;
   width: min(720px, calc(100vw - 24px));
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .toolbar-inner {
@@ -276,6 +278,7 @@ body::after {
   align-items: center;
   gap: 6px;
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  pointer-events: auto;
 }
 
 .tool:hover {
@@ -326,6 +329,7 @@ body::after {
   backdrop-filter: blur(10px);
   overflow-y: auto;
   overflow-x: hidden;
+  pointer-events: none;
 }
 
 .recipes-title {

@@ -5,6 +5,7 @@ import { setupToolbar } from './toolbar.js';
 import { createAgent } from './agent.js';
 import { AssetLibrary } from './assets.js';
 import { updateWorldItems } from './resources.js';
+import { setupRecipeHud } from './recipes.js';
 
 const canvas = document.getElementById('game');
 const world = createWorld(canvas);
@@ -16,6 +17,7 @@ await assets.preload();
 const agent = createAgent(world, assets);
 const drop = setupDrop(world, assets, cam);
 setupToolbar(drop);
+setupRecipeHud();
 
 let last = performance.now();
 

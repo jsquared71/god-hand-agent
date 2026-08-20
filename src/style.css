@@ -264,6 +264,80 @@ body::after {
   display: block;
 }
 
+#recipes-hud {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 5;
+  width: min(280px, calc(50vw - 24px));
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.recipes-title {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.recipe-section {
+  margin-bottom: 8px;
+}
+
+.recipe-section:last-child {
+  margin-bottom: 0;
+}
+
+.recipe-section-title {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+  opacity: 0.75;
+}
+
+.recipe-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.recipe-item:last-child {
+  border-bottom: none;
+}
+
+.recipe-output {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.recipe-cost {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recipe-cost-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-left: 2px;
+}
+
 #drag-chip {
   position: fixed;
   z-index: 20;

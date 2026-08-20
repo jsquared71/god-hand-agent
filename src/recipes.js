@@ -64,8 +64,8 @@ export const BUILD = {
 
 export const TOOLS_PROCESS_MULT = 0.62;
 
-export const HUNGER_DRAIN = 0.011;
-export const HUNGER_DRAIN_NEAR_HUT = 0.0045;
+export const HUNGER_DRAIN = 0.0035;
+export const HUNGER_DRAIN_NEAR_HUT = 0.0014;
 export const HUT_RADIUS = 2.4;
 export const WORKBENCH_RADIUS = 1.7;
 export const PICKUP_RADIUS = 0.85;
@@ -94,4 +94,66 @@ export function inventoryEmpty(inv) {
 
 export function emptyInventory() {
   return Object.fromEntries(ALL_ITEM_TYPES.map((t) => [t, 0]));
+}
+
+export function setupRecipeHud() {
+  const recipesList = document.getElementById('recipes-list');
+  if (!recipesList) return;
+
+  let html = '';
+
+  html += '<div class="recipe-section">';
+  html += '<div class="recipe-section-title">Process</div>';
+  
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Planks</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.wood}"></span>1`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Ingot</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.ore}"></span>1`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Bread</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.grain}"></span>1`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '</div>';
+
+  html += '<div class="recipe-section">';
+  html += '<div class="recipe-section-title">Build</div>';
+  
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Workbench</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.planks}"></span>2`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Hut</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.planks}"></span>3`;
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.stone}"></span>2`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '<div class="recipe-item">';
+  html += '<span class="recipe-output">Tools</span>';
+  html += '<span class="recipe-cost">';
+  html += `<span class="recipe-cost-dot" style="background:${COLORS.ingot}"></span>2`;
+  html += '</span>';
+  html += '</div>';
+
+  html += '</div>';
+
+  recipesList.innerHTML = html;
 }

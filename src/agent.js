@@ -14,8 +14,10 @@ import {
   HUNGER_DRAIN_NEAR_HUT,
   HUT_RADIUS,
   WORKBENCH_RADIUS,
+  FIRE_RADIUS,
   PICKUP_RADIUS,
   canAfford,
+  canProcess,
   spend,
   processDuration,
   inventoryEmpty,
@@ -24,8 +26,8 @@ import {
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding } from './resources.js';
 
-const FOOD_TYPES = ['berry', 'grain', 'bread'];
-const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain'];
+const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
+const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain', 'water', 'fish', 'dough', 'sticks'];
 const THINK_DT = 0.28;
 
 export function createAgent(world, assets) {
@@ -70,6 +72,11 @@ export function createAgent(world, assets) {
   function benchNear() {
     const { item, dist } = nearestBuilding(world, group.position, 'workbench');
     return dist < WORKBENCH_RADIUS ? item : null;
+  }
+
+  function fireNear() {
+    const { item, dist } = nearestBuilding(world, group.position, 'fire');
+    return dist < FIRE_RADIUS ? item : null;
   }
 
   function snap() {
@@ -145,7 +152,7 @@ export function createAgent(world, assets) {
     if (name === 'seek_food' && s.food.item && state.hunger < 0.7) shape += 0.04;
     if (name === 'idle' && state.hunger < 0.3 && s.food.item) shape -= 0.12;
     if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
-    if (name === 'process' && canProcess()) shape += 0.03;
+    if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
     if (name === 'seek_material' && s.wood.item) shape += 0.02;
     brain.reinforce(shape);
@@ -153,31 +160,39 @@ export function createAgent(world, assets) {
 
   function hasAnyFood(s) {
     return (
-      state.inventory.berry > 0 ||
-      state.inventory.grain > 0 ||
-      state.inventory.bread > 0 ||
+      FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
       !!(s && s.food.item)
     );
   }
 
-  function canProcess() {
-    return Object.keys(PROCESS).some((k) => (state.inventory[k] || 0) > 0);
+  function canProcessAny() {
+    return Object.keys(PROCESS).some((k) => canProcess(k, state.inventory));
   }
 
   function nextBuild() {
     if (!state.hasTools && canAfford(state.inventory, BUILD.tools.cost)) return 'tools';
     const hasWb = world.buildings.some((b) => b.type === 'workbench');
     const hasHut = world.buildings.some((b) => b.type === 'hut');
+    const hasFire = world.buildings.some((b) => b.type === 'fire');
+    const hasWell = world.buildings.some((b) => b.type === 'well');
+    const hasChest = world.buildings.some((b) => b.type === 'chest');
     if (!hasWb && canAfford(state.inventory, BUILD.workbench.cost)) return 'workbench';
     if (!hasHut && canAfford(state.inventory, BUILD.hut.cost)) return 'hut';
+    if (!hasFire && canAfford(state.inventory, BUILD.fire.cost)) return 'fire';
+    if (!hasWell && canAfford(state.inventory, BUILD.well.cost)) return 'well';
+    if (!hasChest && canAfford(state.inventory, BUILD.chest.cost)) return 'chest';
     return null;
   }
 
   function bestInvFood() {
+    if (state.inventory.stew > 0) return 'stew';
+    if (state.inventory.cooked_fish > 0) return 'cooked_fish';
     if (state.inventory.bread > 0) return 'bread';
+    if (state.inventory.fish > 0) return 'fish';
     if (state.inventory.berry > 0) return 'berry';
     if (state.inventory.grain > 0 && state.hunger < 0.4) return 'grain';
     if (state.inventory.grain > 0) return 'grain';
+    if (state.inventory.water > 0) return 'water';
     return null;
   }
 
@@ -236,8 +251,9 @@ export function createAgent(world, assets) {
 
   function startProcess(inputType) {
     const atBench = !!benchNear();
-    const dur = processDuration(inputType, { atBench, hasTools: state.hasTools });
-    state.busy = { kind: 'process', t: 0, dur, inputType, atBench };
+    const nearFire = !!fireNear();
+    const dur = processDuration(inputType, { atBench, hasTools: state.hasTools, nearFire });
+    state.busy = { kind: 'process', t: 0, dur, inputType, atBench, nearFire };
   }
 
   function startBuild(what) {
@@ -260,10 +276,18 @@ export function createAgent(world, assets) {
       }
       brain.reinforce(0.9 + rec.hunger);
     } else if (b.kind === 'process') {
-      if ((state.inventory[b.inputType] || 0) > 0) {
+      const rec = PROCESS[b.inputType];
+      if (rec.inputs) {
+        if (canAfford(state.inventory, rec.inputs)) {
+          state.inventory = spend(state.inventory, rec.inputs);
+          const outCount = rec.outCount || 1;
+          state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
+          brain.reinforce(0.85);
+        }
+      } else if ((state.inventory[b.inputType] || 0) > 0) {
         state.inventory[b.inputType] -= 1;
-        const out = PROCESS[b.inputType].out;
-        state.inventory[out] = (state.inventory[out] || 0) + 1;
+        const outCount = rec.outCount || 1;
+        state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
         brain.reinforce(0.85);
       }
     } else if (b.kind === 'build') {
@@ -353,22 +377,25 @@ export function createAgent(world, assets) {
     }
 
     if (actName === 'process') {
-      if (!canProcess()) {
-        const n = nearestPickup(world, group.position, ['wood', 'ore', 'grain']);
+      if (!canProcessAny()) {
+        const n = nearestPickup(world, group.position, ['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
         if (n.item) {
           const remain = walkToward(n.item.mesh.position.x, n.item.mesh.position.z, dt, speed);
-          if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain']);
+          if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
           return remain >= PICKUP_RADIUS;
         }
         brain.reinforce(-0.04);
         return false;
       }
       const wb = nearestBuilding(world, group.position, 'workbench');
-      if (wb.item && wb.dist > WORKBENCH_RADIUS) {
-        walkToward(wb.item.mesh.position.x, wb.item.mesh.position.z, dt, speed);
+      const fire = nearestBuilding(world, group.position, 'fire');
+      const bestDist = Math.min(wb.dist, fire.dist);
+      const bestTarget = wb.dist < fire.dist ? wb : fire;
+      if (bestTarget.item && bestDist > Math.max(WORKBENCH_RADIUS, FIRE_RADIUS) * 0.8) {
+        walkToward(bestTarget.item.mesh.position.x, bestTarget.item.mesh.position.z, dt, speed);
         return true;
       }
-      const input = ['wood', 'ore', 'grain'].find((k) => state.inventory[k] > 0);
+      const input = Object.keys(PROCESS).find((k) => canProcess(k, state.inventory));
       if (input) startProcess(input);
       return false;
     }
@@ -379,6 +406,9 @@ export function createAgent(world, assets) {
         const need = [];
         if (!world.buildings.some((b) => b.type === 'workbench')) need.push('wood', 'planks');
         else if (!world.buildings.some((b) => b.type === 'hut')) need.push('wood', 'planks', 'stone');
+        else if (!world.buildings.some((b) => b.type === 'fire')) need.push('wood', 'stone');
+        else if (!world.buildings.some((b) => b.type === 'well')) need.push('stone', 'planks');
+        else if (!world.buildings.some((b) => b.type === 'chest')) need.push('wood', 'planks');
         else if (!state.hasTools) need.push('ore', 'ingot');
         const n = nearestPickup(world, group.position, need.length ? need : MATERIAL_TYPES);
         if (n.item) {
@@ -423,9 +453,15 @@ export function createAgent(world, assets) {
           wood: '#6b3f1d',
           stone: '#8a8f99',
           ore: '#5a3228',
+          water: '#4a9fc8',
           planks: '#d4a574',
           ingot: '#7b8792',
           bread: '#c4843c',
+          stew: '#d46c3a',
+          dough: '#e8d8a4',
+          fish: '#78a8c4',
+          cooked_fish: '#c89870',
+          sticks: '#8b6239',
         };
         return `<span class="inv-chip ${n ? '' : 'empty'}"><span class="dot" style="background:${colors[t]}"></span>${t} ×${n}</span>`;
       });

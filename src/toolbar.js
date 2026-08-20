@@ -31,6 +31,13 @@ const ICONS = {
       <rect x="12" y="13" width="5" height="4" fill="#c45c26" transform="rotate(20 14 15)"/>
       <rect x="18" y="16" width="4" height="3" fill="#c45c26"/>
     </svg>`,
+  water: (c) => `
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <ellipse cx="16" cy="20" rx="10" ry="6" fill="${c}" opacity="0.7"/>
+      <circle cx="12" cy="12" r="3" fill="${c}"/>
+      <circle cx="18" cy="14" r="3.5" fill="${c}"/>
+      <circle cx="16" cy="18" r="2.5" fill="${c}"/>
+    </svg>`,
 };
 
 export function setupToolbar(drop) {

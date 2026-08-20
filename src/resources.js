@@ -292,7 +292,9 @@ export function updateWorldItems(world, dt) {
       if (nextX >= b.minX && nextX <= b.maxX && nextZ >= b.minZ && nextZ <= b.maxZ) {
         creature.mesh.position.x = nextX;
         creature.mesh.position.z = nextZ;
-        creature.mesh.rotation.y = creature.dir;
+        // Orient mesh to face movement direction
+        // Models are built with head at +X, so we need to offset by -π/2
+        creature.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
       } else {
         creature.dir += Math.PI;
       }

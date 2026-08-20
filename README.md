@@ -125,6 +125,32 @@ Ids: `agent`, `berry`, `grain`, `wood`, `stone`, `ore`, `water`, `planks`, `ingo
 
 See `public/assets/glb/README.md` for Meshy Smart Topology export notes. Drop files in and refresh — no code rewrite.
 
+## Save & Load
+
+The game includes a full save/load system to preserve your world and the agent's learned behavior.
+
+### Saving
+- Click the **Save** button in the HUD (top-left panel)
+- A file save dialog will open (or download will start)
+- Saves to `god-hand-save-<timestamp>.json`
+- Keyboard shortcut: `Ctrl+S`
+- **Autosave**: Every 15 seconds to localStorage (survives page refresh)
+
+### Loading
+- Click the **Load** button in the HUD
+- Select a previously saved `.json` file
+- World state is instantly restored
+
+### What's Saved
+- Agent position, stats (hunger, energy), inventory, and brain weights (learned behavior)
+- All dropped pickups (type + position)
+- All built structures (hut, fire, workbench, well, chest)
+- Forage source charges and cooldowns
+- Camera position
+- Format version for future compatibility
+
+On page load, if an autosave exists in localStorage, you'll be prompted to restore it. Otherwise, the world starts fresh with a few food pickups scattered on the ground.
+
 ## Stack
 
 Vite + vanilla JS (ES modules) + three.js.

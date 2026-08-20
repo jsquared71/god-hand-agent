@@ -24,13 +24,15 @@ import {
   emptyInventory,
   ALL_ITEM_TYPES,
 } from './recipes.js';
-import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
+import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
 import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue } from './discovery.js';
 
 const FORAGE_RADIUS = 1.2;
+const HUNT_RADIUS = 1.5;
+const TEND_RADIUS = 1.2;
 const THINK_DT = 0.28;
-const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
+const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish', 'mushroom', 'fruit', 'herb', 'meat', 'egg', 'milk'];
 const MATERIAL_TYPES = ['wood', 'ore', 'stone', 'planks', 'ingot', 'grain'];
 
 export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
@@ -95,11 +97,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const wb = nearestBuilding(world, group.position, 'workbench');
     const hut = nearestBuilding(world, group.position, 'hut');
     
-    const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish', 'mushroom']);
+    const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish', 'mushroom', 'fruit', 'herb']);
     const forageWood = nearestForageSource(world, group.position, ['wood']);
     const forageOre = nearestForageSource(world, group.position, ['ore']);
     const forageStone = nearestForageSource(world, group.position, ['stone']);
     const forageWater = nearestForageSource(world, group.position, ['water']);
+    const huntable = nearestHuntableFauna(world, group.position);
+    const tendable = nearestTendableFauna(world, group.position);
     
     return {
       food,
@@ -114,9 +118,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       forageOre,
       forageStone,
       forageWater,
+      huntable,
+      tendable,
       hasHut: world.buildings.some((b) => b.type === 'hut'),
       hasWorkbench: world.buildings.some((b) => b.type === 'workbench'),
       hasForageSources: world.forageSources && world.forageSources.some((s) => s.charges > 0),
+      hasPen: world.buildings.some((b) => b.type === 'pen'),
+      hasTrough: world.buildings.some((b) => b.type === 'trough'),
     };
   }
 
@@ -266,16 +274,37 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     );
   }
   
+  function getItemBases(itemId) {
+    if (!state.notebook) return [itemId];
+    
+    const info = state.notebook._getItemInfo(itemId);
+    return info.bases || [itemId];
+  }
+  
+  function hasWeapon() {
+    // Check if agent has any weapon-tagged item
+    if (!state.notebook) {
+      return state.hasTools; // Fallback: tools count as weapons
+    }
+    
+    for (const [itemId, count] of Object.entries(state.inventory)) {
+      if (count > 0 && itemHasTag(itemId, TAGS.WEAPON, state.notebook)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
   function canCombineAny() {
     // Can combine if we have at least 2 different items with count > 0
-    // But not if the only options are food+food (except water/fire as cooking liquids)
     const items = Object.entries(state.inventory)
       .filter(([_, count]) => count > 0)
       .map(([id, _]) => id);
     
     if (items.length < 2) return false;
     
-    // Check if we can find a valid pair (not both food, or one is water/fire)
+    // Check if we can find a valid pair
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
         const item1 = items[i];
@@ -290,10 +319,30 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         const isFire1 = item1 === 'fire';
         const isFire2 = item2 === 'fire';
         
-        // Valid if: not both food, OR one is water, OR one is fire
-        if (!isFood1 || !isFood2 || isWater1 || isWater2 || isFire1 || isFire2) {
-          return true;
-        }
+        // If not both food, always valid
+        if (!isFood1 || !isFood2) return true;
+        
+        // If one is water or fire, valid (cooking)
+        if (isWater1 || isWater2 || isFire1 || isFire2) return true;
+        
+        // Both are food and no water/fire: check if merging bases would be new
+        const bases1 = getItemBases(item1);
+        const bases2 = getItemBases(item2);
+        const merged = [...new Set([...bases1, ...bases2])].sort();
+        
+        // Check if a recipe with these exact bases already exists
+        const existingRecipe = Array.from(state.notebook.recipes.values()).find(r => {
+          if (!r.bases) return false;
+          const rBases = [...r.bases].sort();
+          return rBases.length === merged.length && rBases.every((b, idx) => b === merged[idx]);
+        });
+        
+        // If no existing recipe with these bases, this is a valid new combo
+        if (!existingRecipe) return true;
+        
+        // If the exact pair is already known, we can remake it
+        const key = [item1, item2].sort().join('+');
+        if (state.notebook.recipes.has(key)) return true;
       }
     }
     
@@ -301,69 +350,73 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
   
   function pickTwoCombineItems() {
-    // Pick two different items from inventory, preferring mixed pairs
+    // Pick two different items from inventory
     const items = Object.entries(state.inventory)
       .filter(([_, count]) => count > 0)
       .map(([id, _]) => id);
     
     if (items.length < 2) return null;
     
-    // Try to find a mixed pair (food + non-food, or food + water/fire)
-    const foodItems = [];
-    const nonFoodItems = [];
+    if (!state.notebook) {
+      // Fallback: pick any two
+      const idx1 = Math.floor(Math.random() * items.length);
+      let idx2 = Math.floor(Math.random() * items.length);
+      while (idx2 === idx1 && items.length > 1) {
+        idx2 = Math.floor(Math.random() * items.length);
+      }
+      return [items[idx1], items[idx2]];
+    }
     
-    for (const item of items) {
-      if (state.notebook && isFood(item, state.notebook)) {
-        foodItems.push(item);
-      } else {
-        nonFoodItems.push(item);
+    // Try to find valid pairs
+    const validPairs = [];
+    
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        
+        const isFood1 = isFood(item1, state.notebook);
+        const isFood2 = isFood(item2, state.notebook);
+        const isWater1 = item1 === 'water';
+        const isWater2 = item2 === 'water';
+        const isFire1 = item1 === 'fire';
+        const isFire2 = item2 === 'fire';
+        
+        // Not both food, or one is water/fire: valid
+        if (!isFood1 || !isFood2 || isWater1 || isWater2 || isFire1 || isFire2) {
+          validPairs.push([item1, item2]);
+          continue;
+        }
+        
+        // Both food: check if bases would be new or if exact pair is known
+        const bases1 = getItemBases(item1);
+        const bases2 = getItemBases(item2);
+        const merged = [...new Set([...bases1, ...bases2])].sort();
+        
+        const existingRecipe = Array.from(state.notebook.recipes.values()).find(r => {
+          if (!r.bases) return false;
+          const rBases = [...r.bases].sort();
+          return rBases.length === merged.length && rBases.every((b, idx) => b === merged[idx]);
+        });
+        
+        if (!existingRecipe) {
+          validPairs.push([item1, item2]);
+          continue;
+        }
+        
+        // Exact pair is a known recipe: allow remaking it
+        const key = [item1, item2].sort().join('+');
+        if (state.notebook.recipes.has(key)) {
+          validPairs.push([item1, item2]);
+        }
       }
     }
     
-    // Prefer mixed pairs
-    if (foodItems.length > 0 && nonFoodItems.length > 0) {
-      const food = foodItems[Math.floor(Math.random() * foodItems.length)];
-      const nonFood = nonFoodItems[Math.floor(Math.random() * nonFoodItems.length)];
-      return [food, nonFood];
+    if (validPairs.length > 0) {
+      return validPairs[Math.floor(Math.random() * validPairs.length)];
     }
     
-    // If only food items, check if we have water or fire
-    if (foodItems.length >= 2) {
-      const hasWater = foodItems.includes('water');
-      const hasFire = foodItems.includes('fire');
-      
-      if (hasWater) {
-        const other = foodItems.find(f => f !== 'water');
-        if (other) return ['water', other];
-      }
-      
-      if (hasFire) {
-        const other = foodItems.find(f => f !== 'fire');
-        if (other) return ['fire', other];
-      }
-      
-      // Both are food and no water/fire - don't combine
-      return null;
-    }
-    
-    // If only non-food items, pick any two
-    if (nonFoodItems.length >= 2) {
-      const idx1 = Math.floor(Math.random() * nonFoodItems.length);
-      let idx2 = Math.floor(Math.random() * nonFoodItems.length);
-      while (idx2 === idx1 && nonFoodItems.length > 1) {
-        idx2 = Math.floor(Math.random() * nonFoodItems.length);
-      }
-      return [nonFoodItems[idx1], nonFoodItems[idx2]];
-    }
-    
-    // Fallback: pick any two
-    const idx1 = Math.floor(Math.random() * items.length);
-    let idx2 = Math.floor(Math.random() * items.length);
-    while (idx2 === idx1 && items.length > 1) {
-      idx2 = Math.floor(Math.random() * items.length);
-    }
-    
-    return [items[idx1], items[idx2]];
+    return null;
   }
   
   function updateBestGatherMult() {
@@ -636,6 +689,15 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       case 'ore':
         dur = 9.0;
         break;
+      case 'mushroom':
+        dur = 3.5;
+        break;
+      case 'fruit':
+        dur = 3.8;
+        break;
+      case 'herb':
+        dur = 3.0;
+        break;
     }
     
     // Tools reduce forage time to 75%
@@ -644,6 +706,16 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     state.busy = { kind: 'forage', t: 0, dur, source, hasTools: state.hasTools };
+  }
+  
+  function startHunt(creature) {
+    // Hunting duration ~6s
+    state.busy = { kind: 'hunt', t: 0, dur: 6.0, creature };
+  }
+  
+  function startTend(creature) {
+    // Tending duration ~8s
+    state.busy = { kind: 'tend', t: 0, dur: 8.0, creature };
   }
   
   function startCombine(item1, item2) {
@@ -740,6 +812,17 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           }
         }
       }
+    } else if (b.kind === 'hunt') {
+      const hunted = huntFauna(world, assets, b.creature, group.position);
+      if (hunted) {
+        playGather();
+        brain.reinforce(0.8);
+      }
+    } else if (b.kind === 'tend') {
+      const tended = tendFauna(world, b.creature);
+      if (tended) {
+        brain.reinforce(0.7);
+      }
     }
   }
 
@@ -771,31 +854,60 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (actName === 'seek_food') {
       const food = s.food.item;
       const forageFood = s.forageFood.item;
+      const huntable = s.huntable.item;
+      const tendable = s.tendable.item;
       
-      // Choose closer option: pickup or forage source
-      const useForage = !food || (forageFood && s.forageFood.dist < s.food.dist);
+      // Build list of options with distances
+      const options = [];
+      if (food) options.push({ type: 'pickup', item: food, dist: s.food.dist });
+      if (forageFood) options.push({ type: 'forage', item: forageFood, dist: s.forageFood.dist });
+      if (huntable && hasWeapon()) options.push({ type: 'hunt', item: huntable, dist: s.huntable.dist });
+      if (tendable && s.hasPen && s.hasTrough) options.push({ type: 'tend', item: tendable, dist: s.tendable.dist });
       
-      if (useForage && forageFood) {
-        const target = getSideSlotTarget(forageFood.mesh.position.x, forageFood.mesh.position.z);
-        const remain = walkToward(target.x, target.z, dt, speed);
-        if (remain < FORAGE_RADIUS) {
-          startForage(forageFood);
-          return false;
-        }
-        return true;
-      } else if (food) {
-        const target = getSideSlotTarget(food.mesh.position.x, food.mesh.position.z);
-        const remain = walkToward(target.x, target.z, dt, speed);
-        if (remain < PICKUP_RADIUS) {
-          // If full, pick up food into inventory instead of eating
-          if (state.hunger >= 0.75) {
-            pickupIfClose([food.type]);
-          } else {
-            startEat(food.type, food);
+      // Choose closest option
+      options.sort((a, b) => a.dist - b.dist);
+      const best = options[0];
+      
+      if (best) {
+        if (best.type === 'forage') {
+          const target = getSideSlotTarget(best.item.mesh.position.x, best.item.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
+          if (remain < FORAGE_RADIUS) {
+            startForage(best.item);
+            return false;
           }
-          return false;
+          return true;
+        } else if (best.type === 'hunt') {
+          const target = getSideSlotTarget(best.item.mesh.position.x, best.item.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
+          if (remain < HUNT_RADIUS) {
+            startHunt(best.item);
+            return false;
+          }
+          return true;
+        } else if (best.type === 'tend') {
+          const target = getSideSlotTarget(best.item.mesh.position.x, best.item.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
+          if (remain < TEND_RADIUS) {
+            startTend(best.item);
+            return false;
+          }
+          return true;
+        } else {
+          // pickup
+          const target = getSideSlotTarget(best.item.mesh.position.x, best.item.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
+          if (remain < PICKUP_RADIUS) {
+            // If full, pick up food into inventory instead of eating
+            if (state.hunger >= 0.75) {
+              pickupIfClose([best.item.type]);
+            } else {
+              startEat(best.item.type, best.item);
+            }
+            return false;
+          }
+          return true;
         }
-        return true;
       } else {
         const inv = bestInvFood();
         if (inv && state.hunger < 0.75) startEat(inv, null);

@@ -18,11 +18,22 @@ const TARGET_SIZE = {
   fish: 0.4,
   cooked_fish: 0.4,
   sticks: 0.45,
+  mushroom: 0.3,
+  fruit: 0.28,
+  herb: 0.25,
+  meat: 0.38,
+  egg: 0.25,
+  milk: 0.35,
   hut: 4.8,
   workbench: 1.35,
   fire: 1.8,
   well: 1.6,
   chest: 1.2,
+  chair: 0.7,
+  table: 1.0,
+  bed: 1.6,
+  trough: 0.8,
+  pen: 1.2,
 };
 
 function std(color, extra = {}) {
@@ -516,6 +527,233 @@ export function makeSticks() {
   return sitOnGround(g);
 }
 
+export function makeMushroom() {
+  const g = new THREE.Group();
+  g.name = 'mushroom';
+  const cap = std(COLORS.mushroom, { roughness: 0.7 });
+  const stem = std(0xe8d8c4, { roughness: 0.8 });
+  
+  const s = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.12, 6), stem));
+  s.position.y = 0.06;
+  g.add(s);
+  
+  const c = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), cap));
+  c.position.y = 0.14;
+  c.scale.set(1.2, 0.6, 1.2);
+  g.add(c);
+  
+  return sitOnGround(g);
+}
+
+export function makeFruit() {
+  const g = new THREE.Group();
+  g.name = 'fruit';
+  const mat = std(COLORS.fruit, { roughness: 0.5, emissive: 0x4a1a10, emissiveIntensity: 0.12 });
+  const leaf = std(0x3d7a3a);
+  
+  const apple = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 7), mat));
+  apple.position.y = 0.1;
+  apple.scale.set(1, 1.1, 1);
+  g.add(apple);
+  
+  const stem = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.04, 4), leaf));
+  stem.position.y = 0.21;
+  g.add(stem);
+  
+  const l = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.03), leaf));
+  l.position.set(0.03, 0.22, 0);
+  l.rotation.z = 0.5;
+  g.add(l);
+  
+  return sitOnGround(g);
+}
+
+export function makeHerb() {
+  const g = new THREE.Group();
+  g.name = 'herb';
+  const mat = std(COLORS.herb, { roughness: 0.85 });
+  
+  for (let i = 0; i < 4; i++) {
+    const leaf = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.15, 0.02), mat));
+    leaf.position.set((i - 1.5) * 0.05, 0.08, (i % 2) * 0.02);
+    leaf.rotation.y = (i / 4) * Math.PI * 0.5;
+    g.add(leaf);
+  }
+  
+  return sitOnGround(g);
+}
+
+export function makeMeat() {
+  const g = new THREE.Group();
+  g.name = 'meat';
+  const mat = std(COLORS.meat, { roughness: 0.75 });
+  const bone = std(0xf0e8d0, { roughness: 0.85 });
+  
+  const chunk = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.14), mat));
+  chunk.position.y = 0.08;
+  chunk.rotation.y = 0.3;
+  g.add(chunk);
+  
+  const b = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.08, 6), bone));
+  b.position.set(0.08, 0.08, 0);
+  b.rotation.z = 0.5;
+  g.add(b);
+  
+  return sitOnGround(g);
+}
+
+export function makeEgg() {
+  const g = new THREE.Group();
+  g.name = 'egg';
+  const mat = std(COLORS.egg, { roughness: 0.7 });
+  
+  const e = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 7), mat));
+  e.position.y = 0.08;
+  e.scale.set(0.9, 1.15, 0.9);
+  g.add(e);
+  
+  return sitOnGround(g);
+}
+
+export function makeMilk() {
+  const g = new THREE.Group();
+  g.name = 'milk';
+  const vessel = std(0xa67c52, { roughness: 0.75 });
+  const liquid = std(COLORS.milk, { roughness: 0.3 });
+  
+  const bottle = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.18, 8), vessel));
+  bottle.position.y = 0.09;
+  g.add(bottle);
+  
+  const milk = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.14, 8), liquid));
+  milk.position.y = 0.08;
+  g.add(milk);
+  
+  return sitOnGround(g);
+}
+
+export function makeChair() {
+  const g = new THREE.Group();
+  g.name = 'chair';
+  const wood = std(COLORS.chair, { roughness: 0.8 });
+  
+  const seat = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), wood));
+  seat.position.y = 0.3;
+  g.add(seat);
+  
+  const back = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.05), wood));
+  back.position.set(0, 0.5, -0.18);
+  g.add(back);
+  
+  for (let i = 0; i < 4; i++) {
+    const x = (i % 2) * 0.16 - 0.08;
+    const z = Math.floor(i / 2) * 0.16 - 0.08;
+    const leg = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), wood));
+    leg.position.set(x, 0.15, z);
+    g.add(leg);
+  }
+  
+  return sitOnGround(g);
+}
+
+export function makeTable() {
+  const g = new THREE.Group();
+  g.name = 'table';
+  const wood = std(COLORS.table, { roughness: 0.8 });
+  
+  const top = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.6), wood));
+  top.position.y = 0.5;
+  g.add(top);
+  
+  for (let i = 0; i < 4; i++) {
+    const x = (i % 2) * 0.32 - 0.16;
+    const z = Math.floor(i / 2) * 0.24 - 0.12;
+    const leg = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), wood));
+    leg.position.set(x, 0.25, z);
+    g.add(leg);
+  }
+  
+  return sitOnGround(g);
+}
+
+export function makeBed() {
+  const g = new THREE.Group();
+  g.name = 'bed';
+  const wood = std(COLORS.bed, { roughness: 0.8 });
+  const fabric = std(0xe8d8c4, { roughness: 0.9 });
+  
+  const frame = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 1.4), wood));
+  frame.position.y = 0.25;
+  g.add(frame);
+  
+  const mattress = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 1.2), fabric));
+  mattress.position.y = 0.34;
+  g.add(mattress);
+  
+  const headboard = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.06), wood));
+  headboard.position.set(0, 0.45, -0.67);
+  g.add(headboard);
+  
+  return sitOnGround(g);
+}
+
+export function makeTrough() {
+  const g = new THREE.Group();
+  g.name = 'trough';
+  const wood = std(COLORS.trough, { roughness: 0.85 });
+  
+  const base = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.3), wood));
+  base.position.y = 0.04;
+  g.add(base);
+  
+  const side1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.04), wood));
+  side1.position.set(0, 0.14, -0.13);
+  g.add(side1);
+  
+  const side2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.04), wood));
+  side2.position.set(0, 0.14, 0.13);
+  g.add(side2);
+  
+  const end1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.3), wood));
+  end1.position.set(-0.28, 0.14, 0);
+  g.add(end1);
+  
+  const end2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.3), wood));
+  end2.position.set(0.28, 0.14, 0);
+  g.add(end2);
+  
+  return sitOnGround(g);
+}
+
+export function makePen() {
+  const g = new THREE.Group();
+  g.name = 'pen';
+  const wood = std(COLORS.pen, { roughness: 0.85 });
+  
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const x = Math.cos(angle) * 0.5;
+    const z = Math.sin(angle) * 0.5;
+    const post = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), wood));
+    post.position.set(x, 0.2, z);
+    g.add(post);
+    
+    if (i < 7) {
+      const nextAngle = ((i + 1) / 8) * Math.PI * 2;
+      const nextX = Math.cos(nextAngle) * 0.5;
+      const nextZ = Math.sin(nextAngle) * 0.5;
+      const midX = (x + nextX) / 2;
+      const midZ = (z + nextZ) / 2;
+      const rail = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.4), wood));
+      rail.position.set(midX, 0.25, midZ);
+      rail.rotation.y = angle + Math.PI / 2;
+      g.add(rail);
+    }
+  }
+  
+  return sitOnGround(g);
+}
+
 export function makeAgent() {
   const g = new THREE.Group();
   g.name = 'agent';
@@ -587,11 +825,22 @@ const PROCEDURAL = {
   fish: makeFish,
   cooked_fish: makeCookedFish,
   sticks: makeSticks,
+  mushroom: makeMushroom,
+  fruit: makeFruit,
+  herb: makeHerb,
+  meat: makeMeat,
+  egg: makeEgg,
+  milk: makeMilk,
   hut: makeHut,
   workbench: makeWorkbench,
   fire: makeFire,
   well: makeWell,
   chest: makeChest,
+  chair: makeChair,
+  table: makeTable,
+  bed: makeBed,
+  trough: makeTrough,
+  pen: makePen,
 };
 
 function centerAndScale(root, id) {

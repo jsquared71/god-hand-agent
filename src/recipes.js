@@ -17,9 +17,15 @@ export const ALL_ITEM_TYPES = [
   'cooked_fish',
   'fish',
   'sticks',
+  'mushroom',
+  'fruit',
+  'herb',
+  'meat',
+  'egg',
+  'milk',
 ];
 
-export const BUILDING_TYPES = ['workbench', 'hut', 'fire', 'well', 'chest'];
+export const BUILDING_TYPES = ['workbench', 'hut', 'fire', 'well', 'chest', 'chair', 'table', 'bed', 'trough', 'pen'];
 
 export const COLORS = {
   berry: '#c41e5a',
@@ -36,11 +42,22 @@ export const COLORS = {
   fish: '#78a8c4',
   cooked_fish: '#c89870',
   sticks: '#8b6239',
+  mushroom: '#d4745a',
+  fruit: '#e85a4a',
+  herb: '#6a8a4a',
+  meat: '#a84a3a',
+  egg: '#f0e8c0',
+  milk: '#f8f4e0',
   hut: '#8b5a2b',
   workbench: '#5c4033',
   fire: '#e84c22',
   well: '#6a7a8a',
   chest: '#7a5a3a',
+  chair: '#9a7a5a',
+  table: '#b08a6a',
+  bed: '#c89a7a',
+  trough: '#8a7050',
+  pen: '#7a6040',
   agent: '#2a9d8f',
 };
 
@@ -59,11 +76,22 @@ export const LABELS = {
   fish: 'Fish',
   cooked_fish: 'Cooked Fish',
   sticks: 'Sticks',
+  mushroom: 'Mushroom',
+  fruit: 'Fruit',
+  herb: 'Herb',
+  meat: 'Meat',
+  egg: 'Egg',
+  milk: 'Milk',
   hut: 'Hut',
   workbench: 'Workbench',
   fire: 'Campfire',
   well: 'Well',
   chest: 'Chest',
+  chair: 'Chair',
+  table: 'Table',
+  bed: 'Bed',
+  trough: 'Trough',
+  pen: 'Pen',
   tools: 'Tools',
 };
 
@@ -76,6 +104,12 @@ export const FOOD = {
   stew: { hunger: 0.85, time: 6.0, energy: 0.15 },
   fish: { hunger: 0.25, time: 3.2, energy: 0.05 },
   cooked_fish: { hunger: 0.78, time: 5.2, energy: 0.14 },
+  mushroom: { hunger: 0.2, time: 2.5, energy: 0.04 },
+  fruit: { hunger: 0.24, time: 2.9, energy: 0.05 },
+  herb: { hunger: 0.15, time: 2.2, energy: 0.03 },
+  meat: { hunger: 0.35, time: 4.0, energy: 0.07 },
+  egg: { hunger: 0.28, time: 3.0, energy: 0.06 },
+  milk: { hunger: 0.22, time: 2.5, energy: 0.04 },
 };
 
 export const PROCESS = {
@@ -93,6 +127,11 @@ export const BUILD = {
   fire: { cost: { wood: 2, stone: 1 }, time: 10 },
   well: { cost: { stone: 3, planks: 1 }, time: 18 },
   chest: { cost: { planks: 3 }, time: 12 },
+  chair: { cost: { planks: 1, sticks: 1 }, time: 10 },
+  table: { cost: { planks: 2 }, time: 12 },
+  bed: { cost: { planks: 2, grain: 1 }, time: 14 },
+  trough: { cost: { planks: 2, grain: 1 }, time: 10 },
+  pen: { cost: { planks: 2, sticks: 2 }, time: 12 },
   tools: { cost: { ingot: 2 }, time: 8 },
 };
 

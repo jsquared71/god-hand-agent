@@ -65,6 +65,14 @@ export function serializeWorld(world, agents, camera, gameState, notebook = null
       chargesMax: s.chargesMax,
       position: { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z },
     })) : [],
+    fauna: world.fauna ? world.fauna.map((c) => ({
+      species: c.species,
+      biome: c.biome,
+      domestic: c.domestic || false,
+      productionTimer: c.productionTimer || 0,
+      productionInterval: c.productionInterval || 60.0,
+      position: { x: c.mesh.position.x, y: c.mesh.position.y, z: c.mesh.position.z },
+    })) : [],
     pendingRespawns: world.pendingRespawns || [],
     camera: {
       position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
@@ -220,6 +228,19 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
             }
           });
         }
+      }
+    }
+  }
+  
+  // Restore fauna domestication state
+  if (state.fauna && world.fauna) {
+    for (let i = 0; i < Math.min(state.fauna.length, world.fauna.length); i++) {
+      const saved = state.fauna[i];
+      const current = world.fauna[i];
+      if (saved && current && saved.species === current.species) {
+        current.domestic = saved.domestic || false;
+        current.productionTimer = saved.productionTimer || 0;
+        current.productionInterval = saved.productionInterval || 60.0;
       }
     }
   }

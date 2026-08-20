@@ -278,6 +278,49 @@ export function updateWorldItems(world, dt) {
         creature.mesh.position.y = Math.abs(Math.sin(creature.hopPhase)) * 0.08;
       }
       
+      // Domestic animals produce resources periodically
+      if (creature.domestic) {
+        creature.productionTimer = (creature.productionTimer || 0) + dt;
+        
+        // Check if pen and trough exist nearby
+        const hasPen = world.buildings && world.buildings.some(b => b.type === 'pen');
+        const hasTrough = world.buildings && world.buildings.some(b => b.type === 'trough');
+        
+        if (hasPen && hasTrough && creature.productionTimer >= creature.productionInterval) {
+          creature.productionTimer = 0;
+          
+          // Spawn product based on species
+          const assets = world.userData?.assets;
+          if (assets) {
+            let product = 'egg';
+            if (creature.species === 'deer') product = 'milk';
+            else if (creature.species === 'rabbit') product = 'egg'; // Small egg/offspring
+            
+            const offsetX = (Math.random() - 0.5) * 0.6;
+            const offsetZ = (Math.random() - 0.5) * 0.6;
+            spawnPickup(world, assets, product, {
+              x: creature.mesh.position.x + offsetX,
+              z: creature.mesh.position.z + offsetZ,
+            }, { falling: false, isWorldSpawned: false });
+          }
+        }
+        
+        // Domestic animals stay near pen (if it exists)
+        const pen = world.buildings && world.buildings.find(b => b.type === 'pen');
+        if (pen) {
+          // Constrain bounds to near pen
+          const penX = pen.mesh.position.x;
+          const penZ = pen.mesh.position.z;
+          const penRadius = 4.0;
+          creature.bounds = {
+            minX: penX - penRadius,
+            maxX: penX + penRadius,
+            minZ: penZ - penRadius,
+            maxZ: penZ + penRadius,
+          };
+        }
+      }
+      
       // Wander within bounds
       if (Math.random() < dt * 0.5) {
         creature.dir += (Math.random() - 0.5) * 1.5;
@@ -393,4 +436,84 @@ export function harvestForageSource(world, assets, source, agentPos, hasTools = 
   }
   
   return harvestType;
+}
+
+export function nearestHuntableFauna(world, origin) {
+  if (!world.fauna) return { item: null, dist: Infinity };
+  let best = null;
+  let bestD = Infinity;
+  const ox = origin.x;
+  const oz = origin.z;
+  for (const creature of world.fauna) {
+    // Can only hunt wild (non-domestic) land animals
+    if (creature.domestic) continue;
+    if (creature.biome === 'water') continue; // Fish stay forage-only
+    
+    const dx = creature.mesh.position.x - ox;
+    const dz = creature.mesh.position.z - oz;
+    const d = Math.hypot(dx, dz);
+    if (d < bestD) {
+      bestD = d;
+      best = creature;
+    }
+  }
+  return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
+}
+
+export function nearestTendableFauna(world, origin) {
+  if (!world.fauna) return { item: null, dist: Infinity };
+  
+  // Check if pen and trough exist
+  const hasPen = world.buildings && world.buildings.some(b => b.type === 'pen');
+  const hasTrough = world.buildings && world.buildings.some(b => b.type === 'trough');
+  
+  if (!hasPen || !hasTrough) return { item: null, dist: Infinity };
+  
+  let best = null;
+  let bestD = Infinity;
+  const ox = origin.x;
+  const oz = origin.z;
+  for (const creature of world.fauna) {
+    // Can only tend wild land animals
+    if (creature.domestic) continue;
+    if (creature.biome === 'water') continue;
+    
+    const dx = creature.mesh.position.x - ox;
+    const dz = creature.mesh.position.z - oz;
+    const d = Math.hypot(dx, dz);
+    if (d < bestD) {
+      bestD = d;
+      best = creature;
+    }
+  }
+  return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
+}
+
+export function huntFauna(world, assets, creature, agentPos) {
+  if (!creature || creature.domestic) return null;
+  
+  // Remove creature from world
+  const idx = world.fauna.indexOf(creature);
+  if (idx >= 0) {
+    world.fauna.splice(idx, 1);
+    world.scene.remove(creature.mesh);
+  }
+  
+  // Spawn meat at agent position
+  spawnPickup(world, assets, 'meat', {
+    x: agentPos.x,
+    z: agentPos.z,
+  }, { falling: false, isWorldSpawned: false });
+  
+  return 'meat';
+}
+
+export function tendFauna(world, creature) {
+  if (!creature || creature.domestic) return false;
+  
+  // Domesticate the creature
+  creature.domestic = true;
+  creature.productionTimer = 0;
+  
+  return true;
 }

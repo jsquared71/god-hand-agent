@@ -50,7 +50,19 @@ export function removePickup(world, item) {
 
 export function spawnBuilding(world, assets, type, position) {
   const mesh = assets.create(type);
-  mesh.position.set(position.x, 0, position.z);
+  
+  // Find a free position near the requested position to avoid overlaps
+  const finalPosition = findFreeBuildingPosition(world, type, position);
+  if (!finalPosition) {
+    // No free position found, skip the build
+    console.warn(`No free position found for ${type}, skipping build`);
+    mesh.traverse((o) => {
+      if (o.geometry) o.geometry.dispose?.();
+    });
+    return null;
+  }
+  
+  mesh.position.set(finalPosition.x, 0, finalPosition.z);
   mesh.scale.setScalar(0.15);
   mesh.userData = { ...mesh.userData, type, kind: 'building', grow: 0 };
   if (type === 'well') {
@@ -61,6 +73,83 @@ export function spawnBuilding(world, assets, type, position) {
   const b = { type, mesh, position: mesh.position };
   world.buildings.push(b);
   return b;
+}
+
+/**
+ * Find a free position for a building near the requested position.
+ * Returns null if no free position is found.
+ */
+function findFreeBuildingPosition(world, type, requestedPos) {
+  // Building footprint radii (approximate clear radius needed)
+  const buildingRadius = {
+    hut: 2.8,
+    workbench: 1.0,
+    fire: 1.2,
+    well: 1.2,
+    chest: 0.9,
+  };
+  
+  const radius = buildingRadius[type] || 1.0;
+  
+  // Check if a position is free (no overlapping buildings)
+  function isFree(x, z) {
+    for (const existing of world.buildings) {
+      const existingRadius = buildingRadius[existing.type] || 1.0;
+      const dx = existing.mesh.position.x - x;
+      const dz = existing.mesh.position.z - z;
+      const dist = Math.hypot(dx, dz);
+      const minDist = radius + existingRadius;
+      if (dist < minDist) {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  // First try the requested position
+  if (isFree(requestedPos.x, requestedPos.z)) {
+    return { x: requestedPos.x, z: requestedPos.z };
+  }
+  
+  // Try positions in a ring around the requested position
+  // Start with positions close by, in front first
+  const searchOffsets = [
+    // Close front positions
+    { x: 0, z: 0.5 },
+    { x: 0.4, z: 0.4 },
+    { x: -0.4, z: 0.4 },
+    { x: 0.6, z: 0 },
+    { x: -0.6, z: 0 },
+    // Ring positions
+    { x: 0.8, z: 0.8 },
+    { x: -0.8, z: 0.8 },
+    { x: 0.8, z: -0.8 },
+    { x: -0.8, z: -0.8 },
+    { x: 0, z: 1.0 },
+    { x: 0, z: -1.0 },
+    { x: 1.0, z: 0 },
+    { x: -1.0, z: 0 },
+    // Farther ring
+    { x: 1.4, z: 1.4 },
+    { x: -1.4, z: 1.4 },
+    { x: 1.4, z: -1.4 },
+    { x: -1.4, z: -1.4 },
+    { x: 0, z: 2.0 },
+    { x: 0, z: -2.0 },
+    { x: 2.0, z: 0 },
+    { x: -2.0, z: 0 },
+  ];
+  
+  for (const offset of searchOffsets) {
+    const testX = requestedPos.x + offset.x;
+    const testZ = requestedPos.z + offset.z;
+    if (isFree(testX, testZ)) {
+      return { x: testX, z: testZ };
+    }
+  }
+  
+  // No free position found
+  return null;
 }
 
 export function updateWorldItems(world, dt) {

@@ -248,14 +248,18 @@ export function makeHut() {
   const roofDepth = depth / 2 + roofOverhang;
   const roofAngle = 0.6;
   
+  // Back roof plane: tilts up from back wall toward peak (center)
+  // Rotation should be negative to tilt the far edge UP
   const r1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
   r1.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, -roofDepth * Math.cos(roofAngle) * 0.5);
-  r1.rotation.x = roofAngle;
+  r1.rotation.x = -roofAngle;
   g.add(r1);
   
+  // Front roof plane: tilts up from front wall toward peak (center)
+  // Rotation should be positive to tilt the far edge UP
   const r2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
   r2.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, roofDepth * Math.cos(roofAngle) * 0.5);
-  r2.rotation.x = -roofAngle;
+  r2.rotation.x = roofAngle;
   g.add(r2);
   
   const peakHeight = height + roofDepth * Math.sin(roofAngle);

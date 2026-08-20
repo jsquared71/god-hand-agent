@@ -25,6 +25,7 @@ import {
   ALL_ITEM_TYPES,
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
+import { playFootstep, playGather, playBuild } from './audio.js';
 
 const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
 const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain', 'water', 'fish', 'dough', 'sticks'];
@@ -32,13 +33,13 @@ const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
 const HUNGER_FOOD_THRESHOLD = 0.75; // Only seek/eat food when hunger drops to or below 75%
 
-export function createAgent(world, assets) {
+export function createAgent(world, assets, priors = null) {
   const group = assets.create('agent');
   group.position.set(0, 2.4, 0);
   world.scene.add(group);
 
   const parts = group.userData.parts || {};
-  const brain = new Brain();
+  const brain = new Brain(priors);
 
   const state = {
     hunger: 0.62,
@@ -55,6 +56,7 @@ export function createAgent(world, assets) {
     walkPhase: 0,
     thinkAcc: 0,
     sluggish: false,
+    wantBubble: 'Idle',
   };
 
   const hud = {
@@ -64,6 +66,12 @@ export function createAgent(world, assets) {
     energyVal: document.getElementById('energy-val'),
     action: document.getElementById('brain-action'),
     inv: document.getElementById('inventory'),
+    campStatus: {
+      fed: document.getElementById('camp-fed'),
+      housed: document.getElementById('camp-housed'),
+      tooled: document.getElementById('camp-tooled'),
+      stocked: document.getElementById('camp-stocked'),
+    },
   };
 
   function hutNear() {
@@ -131,6 +139,7 @@ export function createAgent(world, assets) {
       state.action = 'idle';
       state.actionIndex = 0;
       state.target = null;
+      state.wantBubble = 'Idle';
       brain.last = null;
       return;
     }
@@ -139,6 +148,7 @@ export function createAgent(world, assets) {
       state.action = 'idle-hungry';
       state.actionIndex = 0;
       state.target = null;
+      state.wantBubble = 'Starving';
       brain.reinforce(-0.2);
       return;
     }
@@ -175,6 +185,9 @@ export function createAgent(world, assets) {
     
     state.actionIndex = action;
     state.action = name;
+    
+    // Update want bubble based on action and state
+    updateWantBubble(s);
 
     // Reinforcement shaping: discourage food actions when above threshold
     let shape = (state.hunger - 0.5) * 0.08;
@@ -192,6 +205,34 @@ export function createAgent(world, assets) {
     if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
     if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
+  }
+  
+  function updateWantBubble(s) {
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const nearHut = hutNear();
+    const nearFire = !!fireNear();
+    
+    if (state.hunger <= 0.3) {
+      state.wantBubble = 'Hungry';
+    } else if (isNight && !nearHut && !nearFire) {
+      state.wantBubble = 'Cold';
+    } else if (!state.hasTools && state.inventory.ingot >= 2) {
+      state.wantBubble = 'Wants tools';
+    } else if (!s.hasWorkbench) {
+      state.wantBubble = 'Wants workbench';
+    } else if (!s.hasHut) {
+      state.wantBubble = 'Wants hut';
+    } else if (state.action === 'seek_material' || state.action === 'seek_food') {
+      state.wantBubble = 'Gathering';
+    } else if (state.action === 'process') {
+      state.wantBubble = 'Crafting';
+    } else if (state.action === 'build') {
+      state.wantBubble = 'Building';
+    } else if (state.hunger > 0.8) {
+      state.wantBubble = 'Content';
+    } else {
+      state.wantBubble = 'Idle';
+    }
   }
 
   function hasAnyFood(s) {
@@ -266,6 +307,18 @@ export function createAgent(world, assets) {
     if (!state.landed) return;
     const root = parts.root;
     const t = performance.now() * 0.001;
+    
+    // Footstep sound
+    if (walking && root) {
+      const phase = Math.sin(state.walkPhase);
+      if (phase > 0.9 && !state.lastFootstep) {
+        playFootstep();
+        state.lastFootstep = true;
+      } else if (phase < 0) {
+        state.lastFootstep = false;
+      }
+    }
+    
     if (!root) {
       group.position.y = walking
         ? Math.abs(Math.sin(state.walkPhase)) * 0.05
@@ -358,10 +411,12 @@ export function createAgent(world, assets) {
           z: group.position.z + ahead.z * 1.4,
         });
       }
+      playBuild();
       brain.reinforce(1.15);
     } else if (b.kind === 'forage') {
       const harvested = harvestForageSource(world, assets, b.source, group.position, b.hasTools || false);
       if (harvested) {
+        playGather();
         brain.reinforce(0.6);
       }
     }
@@ -682,8 +737,21 @@ export function createAgent(world, assets) {
       return;
     }
 
-    const drain = hutNear() ? HUNGER_DRAIN_NEAR_HUT : HUNGER_DRAIN;
-    state.hunger = Math.max(0, state.hunger - drain * dt);
+    // Hunger drain: check if it's night and if agent is protected
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const nearHut = hutNear();
+    const nearFire = !!fireNear();
+    const isProtected = nearHut || nearFire;
+    
+    let hungerDrain = HUNGER_DRAIN;
+    if (isNight && !isProtected) {
+      // Cold at night: 3× faster hunger drain if not near hut or fire
+      hungerDrain = HUNGER_DRAIN * 3.0;
+    } else if (nearHut) {
+      hungerDrain = HUNGER_DRAIN_NEAR_HUT;
+    }
+    
+    state.hunger = Math.max(0, state.hunger - hungerDrain * dt);
     if (state.hunger <= 0) {
       state.energy = Math.max(0.15, state.energy - 0.12 * dt);
       state.sluggish = true;

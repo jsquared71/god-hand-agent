@@ -9,12 +9,21 @@ const AUTOSAVE_INTERVAL_MS = 15000; // 15 seconds
 
 let autosaveTimer = null;
 
-export function serializeWorld(world, agent, camera) {
+export function serializeWorld(world, agents, camera, gameState) {
   const state = {
     version: SAVE_VERSION,
     timestamp: Date.now(),
     seed: world.seed || Date.now(),
-    agent: {
+    worldClock: {
+      time: world.worldClock?.time || 0,
+      dayIndex: world.worldClock?.dayIndex || 0,
+    },
+    gameState: {
+      favor: gameState.favor,
+      favorMax: gameState.favorMax,
+      favorRegenRate: gameState.favorRegenRate,
+    },
+    agents: agents.map(agent => ({
       position: { x: agent.group.position.x, y: agent.group.position.y, z: agent.group.position.z },
       facing: agent.state.facing,
       hunger: agent.state.hunger,
@@ -24,6 +33,7 @@ export function serializeWorld(world, agent, camera) {
       action: agent.state.action,
       actionIndex: agent.state.actionIndex,
       sluggish: agent.state.sluggish,
+      wantBubble: agent.state.wantBubble || 'Idle',
       brain: {
         W1: Array.from(agent.brain.W1),
         b1: Array.from(agent.brain.b1),
@@ -31,7 +41,7 @@ export function serializeWorld(world, agent, camera) {
         b2: Array.from(agent.brain.b2),
         lr: agent.brain.lr,
       },
-    },
+    })),
     pickups: world.pickups.map((p) => ({
       type: p.type,
       position: { x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z },
@@ -64,32 +74,52 @@ export function serializeWorld(world, agent, camera) {
   return state;
 }
 
-export function deserializeWorld(state, world, agent, assets, camera) {
+export function deserializeWorld(state, world, agents, assets, camera, gameState) {
   if (state.version !== SAVE_VERSION) {
     console.warn(`Save version mismatch: expected ${SAVE_VERSION}, got ${state.version}`);
   }
+  
+  // Restore world clock
+  if (state.worldClock && world.worldClock) {
+    world.worldClock.time = state.worldClock.time || 0;
+    world.worldClock.dayIndex = state.worldClock.dayIndex || 0;
+  }
+  
+  // Restore game state
+  if (state.gameState && gameState) {
+    gameState.favor = state.gameState.favor ?? 10;
+    gameState.favorMax = state.gameState.favorMax ?? 20;
+    gameState.favorRegenRate = state.gameState.favorRegenRate ?? 0.05;
+  }
 
-  // Restore agent
-  agent.group.position.set(state.agent.position.x, state.agent.position.y, state.agent.position.z);
-  agent.state.facing = state.agent.facing ?? 0;
-  agent.state.hunger = state.agent.hunger ?? 0.62;
-  agent.state.energy = state.agent.energy ?? 1;
-  agent.state.inventory = { ...state.agent.inventory };
-  agent.state.hasTools = state.agent.hasTools ?? false;
-  agent.state.action = state.agent.action ?? 'idle';
-  agent.state.actionIndex = state.agent.actionIndex ?? 0;
-  agent.state.sluggish = state.agent.sluggish ?? false;
-  agent.state.landed = true;
-  agent.state.vy = 0;
-  agent.group.rotation.y = agent.state.facing;
+  // Restore agents
+  const savedAgents = state.agents || (state.agent ? [state.agent] : []);
+  for (let i = 0; i < Math.min(agents.length, savedAgents.length); i++) {
+    const agentData = savedAgents[i];
+    const agent = agents[i];
+    
+    agent.group.position.set(agentData.position.x, agentData.position.y, agentData.position.z);
+    agent.state.facing = agentData.facing ?? 0;
+    agent.state.hunger = agentData.hunger ?? 0.62;
+    agent.state.energy = agentData.energy ?? 1;
+    agent.state.inventory = { ...agentData.inventory };
+    agent.state.hasTools = agentData.hasTools ?? false;
+    agent.state.action = agentData.action ?? 'idle';
+    agent.state.actionIndex = agentData.actionIndex ?? 0;
+    agent.state.sluggish = agentData.sluggish ?? false;
+    agent.state.wantBubble = agentData.wantBubble || 'Idle';
+    agent.state.landed = true;
+    agent.state.vy = 0;
+    agent.group.rotation.y = agent.state.facing;
 
-  // Restore brain weights
-  if (state.agent.brain) {
-    agent.brain.W1.set(state.agent.brain.W1);
-    agent.brain.b1.set(state.agent.brain.b1);
-    agent.brain.W2.set(state.agent.brain.W2);
-    agent.brain.b2.set(state.agent.brain.b2);
-    agent.brain.lr = state.agent.brain.lr ?? 0.018;
+    // Restore brain weights
+    if (agentData.brain) {
+      agent.brain.W1.set(agentData.brain.W1);
+      agent.brain.b1.set(agentData.brain.b1);
+      agent.brain.W2.set(agentData.brain.W2);
+      agent.brain.b2.set(agentData.brain.b2);
+      agent.brain.lr = agentData.brain.lr ?? 0.018;
+    }
   }
 
   // Clear and restore pickups
@@ -203,8 +233,8 @@ export function deserializeWorld(state, world, agent, assets, camera) {
   console.log('World loaded successfully');
 }
 
-export function saveToFile(world, agent, camera) {
-  const state = serializeWorld(world, agent, camera);
+export function saveToFile(world, agents, camera, gameState) {
+  const state = serializeWorld(world, agents, camera, gameState);
   const json = JSON.stringify(state, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const filename = `god-hand-save-${Date.now()}.json`;
@@ -249,7 +279,7 @@ function downloadBlob(blob, filename) {
   console.log('Saved via download');
 }
 
-export function loadFromFile(world, agent, assets, camera) {
+export function loadFromFile(world, agents, assets, camera, gameState) {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -263,7 +293,7 @@ export function loadFromFile(world, agent, assets, camera) {
       try {
         const text = await file.text();
         const state = JSON.parse(text);
-        deserializeWorld(state, world, agent, assets, camera);
+        deserializeWorld(state, world, agents, assets, camera, gameState);
         resolve(state);
       } catch (err) {
         console.error('Failed to load file:', err);
@@ -303,10 +333,10 @@ export function clearLocalStorage() {
   }
 }
 
-export function startAutosave(world, agent, camera) {
+export function startAutosave(world, agents, camera, gameState) {
   stopAutosave();
   autosaveTimer = setInterval(() => {
-    const state = serializeWorld(world, agent, camera);
+    const state = serializeWorld(world, agents, camera, gameState);
     saveToLocalStorage(state);
   }, AUTOSAVE_INTERVAL_MS);
   console.log(`Autosave enabled (every ${AUTOSAVE_INTERVAL_MS / 1000}s)`);

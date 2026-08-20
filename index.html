@@ -16,6 +16,13 @@
       </div>
       <div class="hud-bars">
         <div class="bar-row">
+          <span class="bar-label">Favor</span>
+          <div class="bar" aria-label="Favor">
+            <div id="favor-fill" class="bar-fill favor"></div>
+          </div>
+          <span id="favor-value" class="bar-val">10</span>
+        </div>
+        <div class="bar-row">
           <span class="bar-label">Hunger</span>
           <div class="bar" aria-label="Hunger">
             <div id="hunger-fill" class="bar-fill hunger"></div>
@@ -33,6 +40,15 @@
       <div class="hud-action">
         <span class="action-kicker">Mind</span>
         <span id="brain-action">Idle</span>
+      </div>
+      <div class="camp-status">
+        <span class="camp-label">Camp</span>
+        <span id="camp-status" class="camp-indicators">
+          <span class="camp-indicator" id="camp-fed">Fed</span>
+          <span class="camp-indicator" id="camp-housed">Housed</span>
+          <span class="camp-indicator" id="camp-tooled">Tooled</span>
+          <span class="camp-indicator" id="camp-stocked">Stocked</span>
+        </span>
       </div>
       <div id="inventory" class="hud-inv"></div>
       <div class="hud-save-load">
@@ -55,6 +71,8 @@
         </button>
       </div>
     </div>
+    
+    <div id="favor-hint" class="favor-hint"></div>
 
     <div id="toolbar">
       <div class="toolbar-inner">

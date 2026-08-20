@@ -598,7 +598,8 @@ export function createWorld(canvas, seed = null) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog('#c9bea6', 28, 78);
-  scene.add(makeSky());
+  const sky = makeSky();
+  scene.add(sky);
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
   camera.position.set(11.5, 9.2, 12.5);
@@ -619,6 +620,12 @@ export function createWorld(canvas, seed = null) {
   sun.shadow.bias = -0.0006;
   scene.add(sun);
   scene.add(sun.target);
+  
+  // Moon light for night
+  const moon = new THREE.DirectionalLight('#a0b8d8', 0);
+  moon.position.set(-18, 20, -12);
+  moon.castShadow = false;
+  scene.add(moon);
 
   const groundMat = new THREE.MeshStandardMaterial({
     map: makeGroundTexture(),
@@ -660,6 +667,92 @@ export function createWorld(canvas, seed = null) {
   const buildings = [];
   const fauna = biomes.fauna;
   const forageSources = biomes.forageSources;
+  
+  // Day/night cycle (4-5 minutes real time: 70% day, 30% night)
+  const DAY_LENGTH = 270; // seconds total (4.5 minutes)
+  const NIGHT_START = 0.7; // 70% through the day
+  const worldClock = {
+    time: 0.25, // Start at morning (25% through day)
+    dayIndex: 0,
+    lastIsNight: false,
+  };
+  
+  function updateDayNight(dt) {
+    worldClock.time += dt / DAY_LENGTH;
+    if (worldClock.time >= 1) {
+      worldClock.time -= 1;
+      worldClock.dayIndex++;
+    }
+    
+    const t = worldClock.time;
+    const isNight = t >= NIGHT_START;
+    const dayT = t / NIGHT_START; // 0-1 through day
+    const nightT = (t - NIGHT_START) / (1 - NIGHT_START); // 0-1 through night
+    
+    // Trigger nightfall sound once per night
+    if (isNight && !worldClock.lastIsNight) {
+      import('./audio.js').then(({ playNightfall }) => playNightfall());
+    }
+    worldClock.lastIsNight = isNight;
+    
+    // Sky colors
+    const skyMat = sky.material;
+    if (isNight) {
+      // Night: dark blue sky
+      const nightBlend = Math.min(1, nightT * 3); // Quick transition into night
+      skyMat.uniforms.topColor.value.lerp(new THREE.Color('#1a2440'), nightBlend * 0.3);
+      skyMat.uniforms.bottomColor.value.lerp(new THREE.Color('#2a3550'), nightBlend * 0.3);
+    } else if (dayT > 0.85) {
+      // Dusk
+      const duskT = (dayT - 0.85) / 0.15;
+      skyMat.uniforms.topColor.value.lerpColors(
+        new THREE.Color('#6d86a0'),
+        new THREE.Color('#8a5a4a'),
+        duskT
+      );
+      skyMat.uniforms.bottomColor.value.lerpColors(
+        new THREE.Color('#e2d3b4'),
+        new THREE.Color('#d4845a'),
+        duskT
+      );
+    } else {
+      // Day
+      skyMat.uniforms.topColor.value.lerp(new THREE.Color('#6d86a0'), 0.1);
+      skyMat.uniforms.bottomColor.value.lerp(new THREE.Color('#e2d3b4'), 0.1);
+    }
+    
+    // Fog colors
+    if (isNight) {
+      scene.fog.color.lerp(new THREE.Color('#1a2030'), 0.05);
+    } else if (dayT > 0.85) {
+      const duskT = (dayT - 0.85) / 0.15;
+      scene.fog.color.lerpColors(
+        new THREE.Color('#c9bea6'),
+        new THREE.Color('#7a5a4a'),
+        duskT
+      );
+    } else {
+      scene.fog.color.lerp(new THREE.Color('#c9bea6'), 0.05);
+    }
+    
+    // Sun and moon
+    if (isNight) {
+      sun.intensity = Math.max(0, 1.35 * (1 - nightT * 2));
+      moon.intensity = Math.min(0.25, nightT * 0.5);
+      hemi.intensity = Math.max(0.2, 0.85 - nightT * 0.65);
+    } else if (dayT > 0.85) {
+      const duskT = (dayT - 0.85) / 0.15;
+      sun.intensity = 1.35 * (1 - duskT * 0.6);
+      moon.intensity = 0;
+      hemi.intensity = 0.85 - duskT * 0.3;
+    } else {
+      sun.intensity = 1.35;
+      moon.intensity = 0;
+      hemi.intensity = 0.85;
+    }
+    
+    renderer.toneMappingExposure = isNight ? 0.7 : 1.05;
+  }
 
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -679,7 +772,12 @@ export function createWorld(canvas, seed = null) {
     fauna,
     forageSources,
     sun,
+    moon,
+    hemi,
+    sky,
     seed: worldSeed,
+    worldClock,
+    updateDayNight,
     render() {
       renderer.render(scene, camera);
     },

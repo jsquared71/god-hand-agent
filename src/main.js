@@ -13,6 +13,7 @@ import {
   startAutosave,
   deserializeWorld,
 } from './save.js';
+import { startFireCrackle, stopFireCrackle } from './audio.js';
 
 const canvas = document.getElementById('game');
 
@@ -37,14 +38,33 @@ await assets.preload();
 // Store assets in world for well water spawning
 world.userData = { assets };
 
-const agent = createAgent(world, assets);
-const drop = setupDrop(world, assets, cam);
-setupToolbar(drop);
+// Global game state: Favor system
+const gameState = {
+  favor: 10, // Start with 10 Favor
+  favorMax: 20,
+  favorRegenRate: 0.05, // Base regen per second
+};
+
+// Create two agents with slightly different priors
+const agent1 = createAgent(world, assets, {
+  b2: [0.15, 0.15, 0.05, 0.35, 0.08, 0.05], // Slightly more builder-biased
+});
+agent1.group.position.set(0, 2.4, 0);
+
+const agent2 = createAgent(world, assets, {
+  b2: [0.1, 0.2, 0.08, 0.4, 0.05, -0.1], // More forager-biased
+});
+agent2.group.position.set(1.5, 2.4, 0.8);
+
+const agents = [agent1, agent2];
+
+const drop = setupDrop(world, assets, cam, gameState);
+setupToolbar(drop, gameState);
 setupRecipeHud();
 
 // Restore world state if autosave was confirmed
 if (autosave && worldSeed !== null) {
-  deserializeWorld(autosave, world, agent, assets, world.camera);
+  deserializeWorld(autosave, world, agents, assets, world.camera, gameState);
 } else {
   // Spawn initial food pickups for new world
   spawnInitialFood();
@@ -75,14 +95,14 @@ const loadBtn = document.getElementById('load-btn');
 
 if (saveBtn) {
   saveBtn.addEventListener('click', () => {
-    saveToFile(world, agent, world.camera);
+    saveToFile(world, agents, world.camera, gameState);
   });
 }
 
 if (loadBtn) {
   loadBtn.addEventListener('click', async () => {
     try {
-      await loadFromFile(world, agent, assets, world.camera);
+      await loadFromFile(world, agents, assets, world.camera, gameState);
     } catch (err) {
       if (err.message !== 'No file selected') {
         alert('Failed to load save file. Check console for details.');
@@ -95,21 +115,76 @@ if (loadBtn) {
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 's') {
     e.preventDefault();
-    saveToFile(world, agent, world.camera);
+    saveToFile(world, agents, world.camera, gameState);
   }
 });
 
 // Start autosave timer
-startAutosave(world, agent, world.camera);
+startAutosave(world, agents, world.camera, gameState);
 
 let last = performance.now();
+
+function updateFavor(dt) {
+  // Base regen
+  let regen = gameState.favorRegenRate * dt;
+  
+  // Bonus regen when camp is thriving
+  const agentsFed = agents.filter(a => a.state.hunger > 0.75).length;
+  const hasHut = world.buildings.some(b => b.type === 'hut');
+  const hasTools = agents.some(a => a.state.hasTools);
+  const hasChest = world.buildings.some(b => b.type === 'chest');
+  const chestStocked = hasChest; // For now, chest existence = stocked
+  
+  if (agentsFed > 0) regen += 0.02 * dt * agentsFed;
+  if (hasHut) regen += 0.03 * dt;
+  if (hasTools) regen += 0.02 * dt;
+  if (chestStocked) regen += 0.02 * dt;
+  
+  gameState.favor = Math.min(gameState.favorMax, gameState.favor + regen);
+  
+  // Update camp status indicators
+  const campStatus = {
+    fed: document.getElementById('camp-fed'),
+    housed: document.getElementById('camp-housed'),
+    tooled: document.getElementById('camp-tooled'),
+    stocked: document.getElementById('camp-stocked'),
+  };
+  
+  if (campStatus.fed) {
+    campStatus.fed.classList.toggle('active', agentsFed === agents.length);
+  }
+  if (campStatus.housed) {
+    campStatus.housed.classList.toggle('active', hasHut);
+  }
+  if (campStatus.tooled) {
+    campStatus.tooled.classList.toggle('active', hasTools);
+  }
+  if (campStatus.stocked) {
+    campStatus.stocked.classList.toggle('active', chestStocked);
+  }
+}
 
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   cam.update();
+  world.updateDayNight(dt);
   updateWorldItems(world, dt);
-  agent.update(dt);
+  updateFavor(dt);
+  
+  // Fire crackle loop
+  const hasFire = world.buildings.some(b => b.type === 'fire');
+  if (hasFire && !gameState.fireCrackleActive) {
+    startFireCrackle();
+    gameState.fireCrackleActive = true;
+  } else if (!hasFire && gameState.fireCrackleActive) {
+    stopFireCrackle();
+    gameState.fireCrackleActive = false;
+  }
+  
+  for (const agent of agents) {
+    agent.update(dt);
+  }
   world.render();
   requestAnimationFrame(frame);
 }

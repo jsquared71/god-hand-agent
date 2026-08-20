@@ -40,7 +40,7 @@ const ICONS = {
     </svg>`,
 };
 
-export function setupToolbar(drop) {
+export function setupToolbar(drop, gameState) {
   const root = document.getElementById('tools');
   root.innerHTML = '';
   for (const type of RAW_TYPES) {
@@ -61,6 +61,21 @@ export function setupToolbar(drop) {
     btn.addEventListener('dragstart', (e) => e.preventDefault());
     root.appendChild(btn);
   }
+  
+  // Update Favor display
+  function updateFavorDisplay() {
+    const favorEl = document.getElementById('favor-value');
+    const favorFillEl = document.getElementById('favor-fill');
+    if (favorEl) {
+      favorEl.textContent = Math.floor(gameState.favor);
+    }
+    if (favorFillEl) {
+      const pct = (gameState.favor / gameState.favorMax) * 100;
+      favorFillEl.style.width = `${pct}%`;
+    }
+    requestAnimationFrame(updateFavorDisplay);
+  }
+  updateFavorDisplay();
 }
 
 function shade(hex) {

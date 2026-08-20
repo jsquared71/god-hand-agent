@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { spawnPickup } from './resources.js';
 
-export function setupDrop(world, assets, camControls) {
+export function setupDrop(world, assets, camControls, gameState) {
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const canvas = world.renderer.domElement;
@@ -82,9 +82,29 @@ export function setupDrop(world, assets, camControls) {
     window.removeEventListener('pointercancel', onUp);
 
     if (hit) {
+      // Check Favor cost
+      if (gameState.favor < 1) {
+        // Not enough Favor! Show brief hint
+        showFavorHint();
+        return;
+      }
+      
+      // Spend Favor
+      gameState.favor -= 1;
+      
       // Player-dropped resources are NOT world-spawned
       spawnPickup(world, assets, type, hit.point, { falling: true, isWorldSpawned: false });
     }
+  }
+  
+  function showFavorHint() {
+    const hintEl = document.getElementById('favor-hint');
+    if (!hintEl) return;
+    hintEl.textContent = 'Not enough Favor!';
+    hintEl.classList.add('show');
+    setTimeout(() => {
+      hintEl.classList.remove('show');
+    }, 1500);
   }
 
   function startDrag(type, event, toolEl) {

@@ -125,6 +125,10 @@ body::after {
   background: linear-gradient(90deg, #1f6f68, var(--energy));
 }
 
+.bar-fill.favor {
+  background: linear-gradient(90deg, #8a5a12, var(--accent));
+}
+
 .bar-val {
   font-size: 11px;
   color: var(--ink);
@@ -405,6 +409,67 @@ body::after {
 
 body.dragging-resource {
   cursor: grabbing;
+}
+
+.camp-status {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.camp-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.camp-indicators {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.camp-indicator {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.camp-indicator.active {
+  background: rgba(106, 196, 184, 0.15);
+  border-color: rgba(106, 196, 184, 0.3);
+  color: var(--energy);
+}
+
+.favor-hint {
+  position: fixed;
+  bottom: 200px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: rgba(212, 78, 32, 0.95);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.favor-hint.show {
+  opacity: 1;
 }
 
 @media (max-width: 640px) {

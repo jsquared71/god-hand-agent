@@ -165,20 +165,23 @@ export function createAgent(world, assets) {
     state.actionIndex = action;
     state.action = name;
 
-    let shape = (state.hunger - 0.5) * 0.06;
-    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger < 0.7) shape += 0.04;
-    if (name === 'idle' && state.hunger < 0.3 && (s.food.item || s.forageFood.item)) shape -= 0.12;
+    let shape = (state.hunger - 0.5) * 0.08;
+    if (state.hunger < 0.3) shape -= 0.15; // Strong penalty for being very hungry and not seeking food
+    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger < 0.7) shape += 0.08;
+    if (name === 'idle' && state.hunger < 0.3 && (s.food.item || s.forageFood.item)) shape -= 0.18;
     if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
     if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
+    if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
   }
 
   function hasAnyFood(s) {
     return (
       FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
-      !!(s && s.food.item)
+      !!(s && s.food.item) ||
+      !!(s && s.forageFood.item)
     );
   }
 

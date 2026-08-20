@@ -4,7 +4,7 @@ import { setupDrop } from './drop.js';
 import { setupToolbar } from './toolbar.js';
 import { createAgent } from './agent.js';
 import { AssetLibrary } from './assets.js';
-import { updateWorldItems } from './resources.js';
+import { updateWorldItems, spawnPickup } from './resources.js';
 import { setupRecipeHud } from './recipes.js';
 
 const canvas = document.getElementById('game');
@@ -14,10 +14,17 @@ const assets = new AssetLibrary();
 
 await assets.preload();
 
+// Store assets in world for well water spawning
+world.userData = { assets };
+
 const agent = createAgent(world, assets);
 const drop = setupDrop(world, assets, cam);
 setupToolbar(drop);
 setupRecipeHud();
+
+// Spawn a few initial fish pickups in the water biome
+spawnPickup(world, assets, 'fish', { x: -3, z: -12 }, { falling: false });
+spawnPickup(world, assets, 'fish', { x: 0, z: -10 }, { falling: false });
 
 let last = performance.now();
 

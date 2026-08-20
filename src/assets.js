@@ -9,11 +9,20 @@ const TARGET_SIZE = {
   wood: 0.7,
   stone: 0.42,
   ore: 0.42,
+  water: 0.35,
   planks: 0.5,
   ingot: 0.42,
   bread: 0.32,
-  hut: 2.4,
+  stew: 0.35,
+  dough: 0.28,
+  fish: 0.4,
+  cooked_fish: 0.4,
+  sticks: 0.45,
+  hut: 4.8,
   workbench: 1.35,
+  fire: 1.8,
+  well: 1.6,
+  chest: 1.2,
 };
 
 function std(color, extra = {}) {
@@ -192,25 +201,68 @@ export function makeHut() {
   const wall = std(0x8b5a2b, { roughness: 0.85 });
   const roof = std(0x5c3317, { roughness: 0.9 });
   const floor = std(0x6b4a2b, { roughness: 0.95 });
-  const base = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.9, 1.4), wall));
-  base.position.y = 0.45;
-  g.add(base);
-  const fl = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.06, 1.4), floor));
-  fl.position.y = 0.03;
-  g.add(fl);
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.62, 0.08), std(0x3a2414));
-  door.position.set(0, 0.34, 0.72);
-  g.add(door);
-  const r1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 1.05), roof));
-  r1.position.set(0, 1.15, -0.28);
-  r1.rotation.x = 0.55;
-  const r2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 1.05), roof));
-  r2.position.set(0, 1.15, 0.28);
-  r2.rotation.x = -0.55;
-  g.add(r1, r2);
-  const peak = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.08, 0.12), roof));
-  peak.position.y = 1.42;
+  const dark = std(0x3a2414, { roughness: 0.95 });
+  
+  const wallThick = 0.15;
+  const width = 3.2;
+  const depth = 2.6;
+  const height = 1.8;
+  const doorWidth = 1.0;
+  
+  const floorMesh = shadow(new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, depth), floor));
+  floorMesh.position.y = 0.04;
+  g.add(floorMesh);
+  
+  const backWall = shadow(new THREE.Mesh(new THREE.BoxGeometry(width, height, wallThick), wall));
+  backWall.position.set(0, height / 2, -depth / 2 + wallThick / 2);
+  g.add(backWall);
+  
+  const leftWallFull = shadow(new THREE.Mesh(new THREE.BoxGeometry(wallThick, height, depth), wall));
+  leftWallFull.position.set(-width / 2 + wallThick / 2, height / 2, 0);
+  g.add(leftWallFull);
+  
+  const rightWallFull = shadow(new THREE.Mesh(new THREE.BoxGeometry(wallThick, height, depth), wall));
+  rightWallFull.position.set(width / 2 - wallThick / 2, height / 2, 0);
+  g.add(rightWallFull);
+  
+  const frontLeftWidth = (width - doorWidth) / 2 - wallThick;
+  const frontLeft = shadow(new THREE.Mesh(new THREE.BoxGeometry(frontLeftWidth, height, wallThick), wall));
+  frontLeft.position.set(-width / 2 + frontLeftWidth / 2 + wallThick, height / 2, depth / 2 - wallThick / 2);
+  g.add(frontLeft);
+  
+  const frontRight = shadow(new THREE.Mesh(new THREE.BoxGeometry(frontLeftWidth, height, wallThick), wall));
+  frontRight.position.set(width / 2 - frontLeftWidth / 2 - wallThick, height / 2, depth / 2 - wallThick / 2);
+  g.add(frontRight);
+  
+  const lintelHeight = 0.25;
+  const lintel = shadow(new THREE.Mesh(new THREE.BoxGeometry(doorWidth + wallThick * 2, lintelHeight, wallThick), wall));
+  lintel.position.set(0, height - lintelHeight / 2, depth / 2 - wallThick / 2);
+  g.add(lintel);
+  
+  const doorFrameInner = shadow(new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.08, height - lintelHeight - 0.08, wallThick * 0.5), dark));
+  doorFrameInner.position.set(0, (height - lintelHeight) / 2, depth / 2 - wallThick / 4);
+  g.add(doorFrameInner);
+  
+  const roofOverhang = 0.3;
+  const roofWidth = width + roofOverhang * 2;
+  const roofDepth = depth / 2 + roofOverhang;
+  const roofAngle = 0.6;
+  
+  const r1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
+  r1.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, -roofDepth * Math.cos(roofAngle) * 0.5);
+  r1.rotation.x = roofAngle;
+  g.add(r1);
+  
+  const r2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
+  r2.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, roofDepth * Math.cos(roofAngle) * 0.5);
+  r2.rotation.x = -roofAngle;
+  g.add(r2);
+  
+  const peakHeight = height + roofDepth * Math.sin(roofAngle);
+  const peak = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth + 0.05, 0.12, 0.18), roof));
+  peak.position.y = peakHeight;
   g.add(peak);
+  
   return sitOnGround(g);
 }
 
@@ -236,6 +288,210 @@ export function makeWorkbench() {
   const vise = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.18), std(0x6e7b85, { metalness: 0.6, roughness: 0.4 })));
   vise.position.set(0.38, 0.7, 0.12);
   g.add(vise);
+  return sitOnGround(g);
+}
+
+export function makeWater() {
+  const g = new THREE.Group();
+  g.name = 'water';
+  const mat = std(COLORS.water, { roughness: 0.25, metalness: 0.15, emissive: 0x1a4a5c, emissiveIntensity: 0.18, transparent: true, opacity: 0.85 });
+  const base = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.08, 8), mat));
+  base.position.y = 0.04;
+  g.add(base);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const drop = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat));
+    drop.position.set(Math.cos(a) * 0.08, 0.1, Math.sin(a) * 0.08);
+    drop.scale.set(1, 1.3, 1);
+    g.add(drop);
+  }
+  return sitOnGround(g);
+}
+
+export function makeFire() {
+  const g = new THREE.Group();
+  g.name = 'fire';
+  const stone = std(0x6a6a6a, { roughness: 0.95 });
+  const fire = std(0xe84c22, { roughness: 0.4, emissive: 0xff3300, emissiveIntensity: 1.2 });
+  const fire2 = std(0xffaa22, { roughness: 0.3, emissive: 0xffaa00, emissiveIntensity: 1.5 });
+  
+  const rocks = [
+    [0.32, 0.08, 0.18, 0.16, 0.12, 0.14],
+    [-0.3, 0.07, 0.22, 0.15, 0.11, 0.13],
+    [0.15, 0.09, -0.35, 0.18, 0.13, 0.16],
+    [-0.18, 0.08, -0.32, 0.16, 0.12, 0.15],
+    [0.05, 0.06, 0.38, 0.12, 0.09, 0.11],
+  ];
+  for (const [x, y, z, sx, sy, sz] of rocks) {
+    const r = shadow(new THREE.Mesh(new THREE.DodecahedronGeometry(0.1, 0), stone));
+    r.position.set(x, y, z);
+    r.scale.set(sx / 0.1, sy / 0.1, sz / 0.1);
+    g.add(r);
+  }
+  
+  const flame1 = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.45, 6), fire));
+  flame1.position.y = 0.28;
+  g.add(flame1);
+  const flame2 = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.35, 5), fire2));
+  flame2.position.set(0.08, 0.32, 0.06);
+  g.add(flame2);
+  const flame3 = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 5), fire2));
+  flame3.position.set(-0.06, 0.26, -0.04);
+  g.add(flame3);
+  
+  const light = new THREE.PointLight(0xff6622, 1.8, 6);
+  light.position.y = 0.3;
+  light.castShadow = false;
+  g.add(light);
+  g.userData.light = light;
+  
+  return sitOnGround(g);
+}
+
+export function makeWell() {
+  const g = new THREE.Group();
+  g.name = 'well';
+  const stone = std(0x8a8f99, { roughness: 0.9 });
+  const wood = std(0x6b3f1d, { roughness: 0.85 });
+  const rope = std(0x9a8a7a, { roughness: 0.95 });
+  
+  const base = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 0.55, 10), stone));
+  base.position.y = 0.28;
+  g.add(base);
+  
+  const post1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.85, 0.08), wood));
+  post1.position.set(-0.35, 0.52, 0);
+  g.add(post1);
+  const post2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.85, 0.08), wood));
+  post2.position.set(0.35, 0.52, 0);
+  g.add(post2);
+  
+  const crossbar = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), wood));
+  crossbar.rotation.z = Math.PI / 2;
+  crossbar.position.y = 0.92;
+  g.add(crossbar);
+  
+  const bucket = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.14, 8), wood));
+  bucket.position.set(0.15, 0.35, 0);
+  g.add(bucket);
+  
+  const ropeM = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 6), rope));
+  ropeM.position.set(0.15, 0.65, 0);
+  g.add(ropeM);
+  
+  return sitOnGround(g);
+}
+
+export function makeChest() {
+  const g = new THREE.Group();
+  g.name = 'chest';
+  const wood = std(0x7a5a3a, { roughness: 0.8 });
+  const metal = std(0x6e7b85, { metalness: 0.6, roughness: 0.4 });
+  
+  const base = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.45), wood));
+  base.position.y = 0.2;
+  g.add(base);
+  
+  const lid = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 0.47), wood));
+  lid.position.y = 0.46;
+  g.add(lid);
+  
+  const latch = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.08), metal));
+  latch.position.set(0, 0.28, 0.24);
+  g.add(latch);
+  
+  return sitOnGround(g);
+}
+
+export function makeStew() {
+  const g = new THREE.Group();
+  g.name = 'stew';
+  const bowl = std(0xa67c52, { roughness: 0.75 });
+  const liquid = std(COLORS.stew, { roughness: 0.4, emissive: 0x3a1a00, emissiveIntensity: 0.1 });
+  
+  const b = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.08, 0.1, 12), bowl));
+  b.position.y = 0.05;
+  g.add(b);
+  
+  const l = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 12), liquid));
+  l.position.y = 0.12;
+  g.add(l);
+  
+  return sitOnGround(g);
+}
+
+export function makeDough() {
+  const g = new THREE.Group();
+  g.name = 'dough';
+  const mat = std(COLORS.dough, { roughness: 0.85 });
+  
+  const blob = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mat));
+  blob.position.y = 0.08;
+  blob.scale.set(1.2, 0.7, 1.1);
+  g.add(blob);
+  
+  return sitOnGround(g);
+}
+
+export function makeFish() {
+  const g = new THREE.Group();
+  g.name = 'fish';
+  const body = std(COLORS.fish, { roughness: 0.5, metalness: 0.15 });
+  const fin = std(0x5a8aa4, { roughness: 0.6 });
+  
+  const b = shadow(new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.22, 4, 8), body));
+  b.rotation.z = Math.PI / 2;
+  b.position.set(0, 0.08, 0);
+  g.add(b);
+  
+  const tail = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.12, 5), fin));
+  tail.rotation.z = -Math.PI / 2;
+  tail.position.set(-0.18, 0.08, 0);
+  g.add(tail);
+  
+  const topFin = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.02), fin));
+  topFin.position.set(0, 0.14, 0);
+  topFin.rotation.x = 0.3;
+  g.add(topFin);
+  
+  return sitOnGround(g);
+}
+
+export function makeCookedFish() {
+  const g = new THREE.Group();
+  g.name = 'cooked_fish';
+  const body = std(COLORS.cooked_fish, { roughness: 0.7 });
+  const accent = std(0xb08060, { roughness: 0.75 });
+  
+  const b = shadow(new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.22, 4, 8), body));
+  b.rotation.z = Math.PI / 2;
+  b.position.set(0, 0.08, 0);
+  g.add(b);
+  
+  const tail = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.12, 5), body));
+  tail.rotation.z = -Math.PI / 2;
+  tail.position.set(-0.18, 0.08, 0);
+  g.add(tail);
+  
+  const stripe1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.14), accent));
+  stripe1.position.set(0.04, 0.08, 0);
+  g.add(stripe1);
+  
+  return sitOnGround(g);
+}
+
+export function makeSticks() {
+  const g = new THREE.Group();
+  g.name = 'sticks';
+  const mat = std(COLORS.sticks, { roughness: 0.9 });
+  
+  for (let i = 0; i < 3; i++) {
+    const s = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.35, 6), mat));
+    s.position.set((i - 1) * 0.08, 0.06, (i - 1) * 0.03);
+    s.rotation.set(0.2, (i - 1) * 0.4, 0.1);
+    g.add(s);
+  }
+  
   return sitOnGround(g);
 }
 
@@ -301,11 +557,20 @@ const PROCEDURAL = {
   wood: makeWood,
   stone: makeStone,
   ore: makeOre,
+  water: makeWater,
   planks: makePlanks,
   ingot: makeIngot,
   bread: makeBread,
+  stew: makeStew,
+  dough: makeDough,
+  fish: makeFish,
+  cooked_fish: makeCookedFish,
+  sticks: makeSticks,
   hut: makeHut,
   workbench: makeWorkbench,
+  fire: makeFire,
+  well: makeWell,
+  chest: makeChest,
 };
 
 function centerAndScale(root, id) {

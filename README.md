@@ -49,25 +49,46 @@ There is no WASD / keyboard camera.
 
 **Eat**
 
-| Food | Time | Hunger |
-|---|---|---|
-| Berry | quick | small |
-| Grain | slower | medium |
-| Bread | agent-made | best |
+| Food | Time | Hunger | Notes |
+|---|---|---|---|
+| Water | quick | tiny | Light refreshment |
+| Berry | quick | small | Raw food |
+| Fish | medium | small | Raw fish |
+| Grain | slower | medium | Raw grain |
+| Bread | agent-made | high | Cooked grain + water |
+| Cooked Fish | agent-made | high | Best near fire |
+| Stew | agent-made | best | Berry + water, best near fire |
 
-**Process** (agent; faster at a workbench, faster still with tools)
+**Process** (agent; faster at a workbench, some faster near fire, faster still with tools)
 
 - wood → planks
 - ore → ingot
-- grain → bread
+- grain + water → bread
+- berry + water → stew (faster near fire)
+- fish → cooked fish (faster near fire)
+- planks → sticks (1 → 2)
 
 **Build** (agent spends inventory)
 
-- planks → workbench
-- planks + stone → hut (hunger drains slower when the agent is near / inside)
-- ingots → tools (held buff: process speed)
+- 2 planks → workbench (speeds processing)
+- 3 planks + 2 stone → hut (hunger drains slower when the agent is near / inside)
+- 2 wood + 1 stone → campfire (speeds cooking)
+- 3 stone + 1 plank → well (slowly produces water pickups)
+- 3 planks → chest (storage decoration)
+- 2 ingots → tools (held buff: process speed)
 
 Dropped world items are pickups. The agent walks to them, eats food in place, and carries materials.
+
+## Biomes
+
+The world contains four distinct biomes around the spawn point:
+
+- **Meadow** (center/east): Grass tufts, berry bushes, grain stalks, wandering rabbits
+- **Forest** (west): Low-poly trees, fallen logs, deer
+- **Rocky** (south): Boulders, ore rocks, sparse vegetation
+- **Water** (north): Pond with reeds and swimming fish (can be collected)
+
+Flora and fauna are mostly decorative with some harvestable pickups (e.g., fish in the pond).
 
 ## Agent brain
 
@@ -85,7 +106,7 @@ Plain JS MLP — **no TensorFlow**.
 
 The loader tries `public/assets/glb/<id>.glb` via `GLTFLoader`. On 404 it uses the procedural low-poly stand-in.
 
-Ids: `agent`, `berry`, `grain`, `wood`, `stone`, `ore`, `planks`, `ingot`, `bread`, `hut`, `workbench`.
+Ids: `agent`, `berry`, `grain`, `wood`, `stone`, `ore`, `water`, `planks`, `ingot`, `bread`, `stew`, `dough`, `fish`, `cooked_fish`, `sticks`, `hut`, `workbench`, `fire`, `well`, `chest`.
 
 See `public/assets/glb/README.md` for Meshy Smart Topology export notes. Drop files in and refresh — no code rewrite.
 

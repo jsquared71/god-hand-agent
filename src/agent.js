@@ -268,19 +268,95 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   
   function canCombineAny() {
     // Can combine if we have at least 2 different items with count > 0
-    const items = Object.entries(state.inventory).filter(([_, count]) => count > 0);
-    return items.length >= 2;
+    // But not if the only options are food+food (except water/fire as cooking liquids)
+    const items = Object.entries(state.inventory)
+      .filter(([_, count]) => count > 0)
+      .map(([id, _]) => id);
+    
+    if (items.length < 2) return false;
+    
+    // Check if we can find a valid pair (not both food, or one is water/fire)
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        
+        if (!state.notebook) return true; // Fallback: allow any combination
+        
+        const isFood1 = isFood(item1, state.notebook);
+        const isFood2 = isFood(item2, state.notebook);
+        const isWater1 = item1 === 'water';
+        const isWater2 = item2 === 'water';
+        const isFire1 = item1 === 'fire';
+        const isFire2 = item2 === 'fire';
+        
+        // Valid if: not both food, OR one is water, OR one is fire
+        if (!isFood1 || !isFood2 || isWater1 || isWater2 || isFire1 || isFire2) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
   }
   
   function pickTwoCombineItems() {
-    // Pick two different items from inventory
+    // Pick two different items from inventory, preferring mixed pairs
     const items = Object.entries(state.inventory)
       .filter(([_, count]) => count > 0)
       .map(([id, _]) => id);
     
     if (items.length < 2) return null;
     
-    // Pick random two
+    // Try to find a mixed pair (food + non-food, or food + water/fire)
+    const foodItems = [];
+    const nonFoodItems = [];
+    
+    for (const item of items) {
+      if (state.notebook && isFood(item, state.notebook)) {
+        foodItems.push(item);
+      } else {
+        nonFoodItems.push(item);
+      }
+    }
+    
+    // Prefer mixed pairs
+    if (foodItems.length > 0 && nonFoodItems.length > 0) {
+      const food = foodItems[Math.floor(Math.random() * foodItems.length)];
+      const nonFood = nonFoodItems[Math.floor(Math.random() * nonFoodItems.length)];
+      return [food, nonFood];
+    }
+    
+    // If only food items, check if we have water or fire
+    if (foodItems.length >= 2) {
+      const hasWater = foodItems.includes('water');
+      const hasFire = foodItems.includes('fire');
+      
+      if (hasWater) {
+        const other = foodItems.find(f => f !== 'water');
+        if (other) return ['water', other];
+      }
+      
+      if (hasFire) {
+        const other = foodItems.find(f => f !== 'fire');
+        if (other) return ['fire', other];
+      }
+      
+      // Both are food and no water/fire - don't combine
+      return null;
+    }
+    
+    // If only non-food items, pick any two
+    if (nonFoodItems.length >= 2) {
+      const idx1 = Math.floor(Math.random() * nonFoodItems.length);
+      let idx2 = Math.floor(Math.random() * nonFoodItems.length);
+      while (idx2 === idx1 && nonFoodItems.length > 1) {
+        idx2 = Math.floor(Math.random() * nonFoodItems.length);
+      }
+      return [nonFoodItems[idx1], nonFoodItems[idx2]];
+    }
+    
+    // Fallback: pick any two
     const idx1 = Math.floor(Math.random() * items.length);
     let idx2 = Math.floor(Math.random() * items.length);
     while (idx2 === idx1 && items.length > 1) {

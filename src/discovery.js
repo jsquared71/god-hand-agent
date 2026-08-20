@@ -130,7 +130,8 @@ export class DiscoveryNotebook {
     const newRecipe = this._generateRecipe(item1, item2);
     this.recipes.set(key, newRecipe);
     
-    return { output: newRecipe.output, discovered: true, recipe: newRecipe };
+    // Return the discovered flag from the recipe (may be false for repeated food-food combos)
+    return { output: newRecipe.output, discovered: newRecipe.discovered !== false, recipe: newRecipe };
   }
   
   _generateRecipe(item1, item2) {
@@ -140,16 +141,37 @@ export class DiscoveryNotebook {
     // Blend tags (union)
     const tags = [...new Set([...info1.tags, ...info2.tags])];
     
-    // Generate output id
-    const output = `${item1}-${item2}-${this.nextGeneratedId++}`;
+    // Check if both inputs are FOOD and neither is water or fire (cooking liquids)
+    const bothFood = info1.tags.includes(TAGS.FOOD) && info2.tags.includes(TAGS.FOOD);
+    const hasWater = item1 === 'water' || item2 === 'water';
+    const hasFire = item1 === 'fire' || item2 === 'fire';
+    
+    let output;
+    let discovered = true;
+    
+    // If both are food and not a cooking recipe, reuse stable leftover
+    if (bothFood && !hasWater && !hasFire) {
+      // Check if mash already exists in discovered recipes
+      const existingMash = Array.from(this.recipes.values()).find(r => r.output === 'mash');
+      if (existingMash) {
+        output = 'mash';
+        discovered = false; // Don't mark as newly discovered
+      } else {
+        output = 'mash'; // First mash
+      }
+    } else {
+      // Generate output id for non-food-food combinations
+      output = `${item1}-${item2}-${this.nextGeneratedId++}`;
+    }
     
     // Generate properties based on tags
     const props = {
       output,
       inputs: [item1, item2],
       tags,
-      label: this._generateLabel(tags, item1, item2),
+      label: this._generateLabel(tags, item1, item2, output),
       color: this._blendColors(info1.color, info2.color),
+      discovered,
     };
     
     // Derive stats from tags
@@ -197,7 +219,12 @@ export class DiscoveryNotebook {
     return { tags: [], color: '#888888', label: itemId };
   }
   
-  _generateLabel(tags, item1, item2) {
+  _generateLabel(tags, item1, item2, output = null) {
+    // Special case for mash
+    if (output === 'mash') {
+      return 'Mash';
+    }
+    
     const parts = [];
     if (tags.includes(TAGS.METAL)) parts.push('Metal');
     if (tags.includes(TAGS.SHARP)) parts.push('Sharp');

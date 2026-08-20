@@ -26,11 +26,14 @@ import {
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
+import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue } from './discovery.js';
 
 const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
+const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
+const MATERIAL_TYPES = ['wood', 'ore', 'stone', 'planks', 'ingot', 'grain'];
 
-export function createAgent(world, assets, priors = null, notebook = null) {
+export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
   const group = assets.create('agent');
   group.position.set(0, 2.4, 0);
   world.scene.add(group);
@@ -39,6 +42,7 @@ export function createAgent(world, assets, priors = null, notebook = null) {
   const brain = new Brain(priors);
 
   const state = {
+    name,
     hunger: 0.62,
     energy: 1,
     inventory: emptyInventory(),
@@ -158,7 +162,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     let hasVehicle = false;
     
     if (state.notebook) {
-      const { itemHasTag, TAGS } = require('./discovery.js');
       for (const [itemId, count] of Object.entries(state.inventory)) {
         if (count > 0) {
           if (itemHasTag(itemId, TAGS.SHARP, state.notebook)) hasSharp = true;
@@ -244,13 +247,11 @@ export function createAgent(world, assets, priors = null, notebook = null) {
   function hasAnyFood(s) {
     // Check inventory for food items
     if (state.notebook) {
-      const { isFood } = require('./discovery.js');
       for (const [itemId, count] of Object.entries(state.inventory)) {
         if (count > 0 && isFood(itemId, state.notebook)) return true;
       }
     }
     // Fallback to known food types
-    const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
     return (
       FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
       !!(s && s.food.item) ||
@@ -288,7 +289,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
       return;
     }
     
-    const { getGatherMult } = require('./discovery.js');
     let best = 1.0;
     
     for (const [itemId, count] of Object.entries(state.inventory)) {
@@ -333,7 +333,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     
     // Check discovered food items
     if (state.notebook) {
-      const { isFood, getFoodValue } = require('./discovery.js');
       let best = null;
       let bestHunger = 0;
       
@@ -418,7 +417,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     
     // If not in base FOOD, check discovered items
     if (!rec && state.notebook) {
-      const { getFoodValue } = require('./discovery.js');
       const foodVal = getFoodValue(type, state.notebook);
       if (foodVal) {
         rec = foodVal;
@@ -462,7 +460,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
       
       // Check discovered food
       if (!rec && state.notebook) {
-        const { getFoodValue } = require('./discovery.js');
         const foodVal = getFoodValue(b.type, state.notebook);
         if (foodVal) rec = foodVal;
       }
@@ -816,21 +813,7 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
     if (hud.energyVal) hud.energyVal.textContent = `${e}%`;
-    if (hud.action) {
-      const busyBit =
-        state.busy?.kind === 'eat'
-          ? 'Eating'
-          : state.busy?.kind === 'process'
-            ? 'Crafting'
-            : state.busy?.kind === 'build'
-              ? 'Building'
-              : state.busy?.kind === 'combine'
-                ? 'Inventing'
-                : state.busy?.kind === 'forage'
-                  ? 'Gathering'
-                  : ACTION_LABELS[state.action] || 'Idle';
-      hud.action.textContent = busyBit;
-    }
+    // Brain action is now updated centrally in main.js to show all agents
     if (hud.inv) {
       const bits = ALL_ITEM_TYPES.map((t) => {
         const n = state.inventory[t] || 0;

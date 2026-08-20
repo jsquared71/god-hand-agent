@@ -96,6 +96,16 @@ export function emptyInventory() {
   return Object.fromEntries(ALL_ITEM_TYPES.map((t) => [t, 0]));
 }
 
+function formatCost(costObj) {
+  return Object.entries(costObj)
+    .map(([material, count]) => {
+      const label = LABELS[material] || material;
+      const color = COLORS[material] || '#888';
+      return `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${color}"></span>${count} ${label.toLowerCase()}</span>`;
+    })
+    .join(' + ');
+}
+
 export function setupRecipeHud() {
   const recipesList = document.getElementById('recipes-list');
   if (!recipesList) return;
@@ -105,53 +115,32 @@ export function setupRecipeHud() {
   html += '<div class="recipe-section">';
   html += '<div class="recipe-section-title">Process</div>';
   
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Planks</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.wood}"></span>1`;
-  html += '</span>';
-  html += '</div>';
-
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Ingot</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.ore}"></span>1`;
-  html += '</span>';
-  html += '</div>';
-
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Bread</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.grain}"></span>1`;
-  html += '</span>';
-  html += '</div>';
+  Object.entries(PROCESS).forEach(([input, recipe]) => {
+    const inputLabel = LABELS[input] || input;
+    const outputLabel = LABELS[recipe.out] || recipe.out;
+    const inputColor = COLORS[input] || '#888';
+    
+    html += '<div class="recipe-item">';
+    html += `<span class="recipe-output">${outputLabel}</span>`;
+    html += '<span class="recipe-cost">';
+    html += `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${inputColor}"></span>1 ${inputLabel.toLowerCase()}</span>`;
+    html += '</span>';
+    html += '</div>';
+  });
 
   html += '</div>';
 
   html += '<div class="recipe-section">';
   html += '<div class="recipe-section-title">Build</div>';
   
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Workbench</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.planks}"></span>2`;
-  html += '</span>';
-  html += '</div>';
-
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Hut</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.planks}"></span>3`;
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.stone}"></span>2`;
-  html += '</span>';
-  html += '</div>';
-
-  html += '<div class="recipe-item">';
-  html += '<span class="recipe-output">Tools</span>';
-  html += '<span class="recipe-cost">';
-  html += `<span class="recipe-cost-dot" style="background:${COLORS.ingot}"></span>2`;
-  html += '</span>';
-  html += '</div>';
+  Object.entries(BUILD).forEach(([buildType, recipe]) => {
+    const label = LABELS[buildType] || buildType;
+    
+    html += '<div class="recipe-item">';
+    html += `<span class="recipe-output">${label}</span>`;
+    html += `<span class="recipe-cost">${formatCost(recipe.cost)}</span>`;
+    html += '</div>';
+  });
 
   html += '</div>';
 

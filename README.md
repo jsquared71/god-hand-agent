@@ -90,6 +90,18 @@ The world contains four distinct biomes around the spawn point:
 
 Flora and fauna are mostly decorative with some harvestable pickups (e.g., fish in the pond).
 
+## Foraging
+
+The agent can forage food and materials directly from biome sources instead of relying only on player-dropped pickups:
+
+- **Berry bushes** (meadow) yield berries
+- **Grain stalks** (meadow) yield grain
+- **Trees and logs** (forest) yield wood
+- **Stone boulders and ore rocks** (rocky) yield stone or ore
+- **Swimming fish** (pond) yield fish
+
+When hungry or short on materials, the agent will walk to the nearest harvestable source, perform a brief gathering animation, and collect the resource. Forage sources have charges and cooldowns—they don't vanish immediately but regenerate after being depleted, keeping the world sustainable. The agent seamlessly chooses between foraged sources and player-dropped pickups based on proximity and need.
+
 ## Agent brain
 
 Plain JS MLP — **no TensorFlow**.

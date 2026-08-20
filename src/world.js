@@ -75,6 +75,7 @@ function makeGroundTexture() {
 
 function createBiomes(scene) {
   const fauna = [];
+  const forageSources = [];
   
   // Meadow (center/east): grass, berries, rabbits
   const meadowMat = new THREE.MeshStandardMaterial({
@@ -96,7 +97,7 @@ function createBiomes(scene) {
     scene.add(grass);
   }
   
-  // Berry bushes
+  // Berry bushes (harvestable)
   const berryBushMat = new THREE.MeshStandardMaterial({
     color: '#4a6a3a',
     roughness: 0.85,
@@ -113,6 +114,42 @@ function createBiomes(scene) {
     bush.castShadow = true;
     bush.receiveShadow = true;
     scene.add(bush);
+    forageSources.push({
+      mesh: bush,
+      type: 'berry',
+      harvestType: 'berry',
+      cooldown: 0,
+      cooldownMax: 8.0,
+      charges: 3,
+      chargesMax: 3,
+    });
+  }
+  
+  // Grain stalks (harvestable)
+  const grainMat = new THREE.MeshStandardMaterial({
+    color: '#d4b84a',
+    roughness: 0.9,
+  });
+  for (let i = 0; i < 6; i++) {
+    const x = 4 + Math.random() * 8;
+    const z = -4 + Math.random() * 8;
+    const stalk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.05, 0.6, 5),
+      grainMat
+    );
+    stalk.position.set(x, 0.3, z);
+    stalk.castShadow = true;
+    stalk.receiveShadow = true;
+    scene.add(stalk);
+    forageSources.push({
+      mesh: stalk,
+      type: 'grain',
+      harvestType: 'grain',
+      cooldown: 0,
+      cooldownMax: 10.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Rabbits
@@ -176,9 +213,18 @@ function createBiomes(scene) {
     foliage.receiveShadow = true;
     tree.add(foliage);
     scene.add(tree);
+    forageSources.push({
+      mesh: tree,
+      type: 'tree',
+      harvestType: 'wood',
+      cooldown: 0,
+      cooldownMax: 12.0,
+      charges: 3,
+      chargesMax: 3,
+    });
   }
   
-  // Logs
+  // Logs (harvestable)
   const logMat = new THREE.MeshStandardMaterial({
     color: '#6b4a2a',
     roughness: 0.95,
@@ -196,6 +242,15 @@ function createBiomes(scene) {
     log.castShadow = true;
     log.receiveShadow = true;
     scene.add(log);
+    forageSources.push({
+      mesh: log,
+      type: 'log',
+      harvestType: 'wood',
+      cooldown: 0,
+      cooldownMax: 8.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Deer
@@ -232,7 +287,7 @@ function createBiomes(scene) {
     });
   }
   
-  // Rocky (south): boulders, rocks
+  // Rocky (south): boulders, rocks (harvestable)
   const rockMat = new THREE.MeshStandardMaterial({
     color: '#7a7a7a',
     roughness: 0.98,
@@ -247,15 +302,25 @@ function createBiomes(scene) {
     const x = -6 + Math.random() * 12;
     const z = 7 + Math.random() * 8;
     const size = 0.3 + Math.random() * 0.6;
+    const isOre = Math.random() < 0.3;
     const rock = new THREE.Mesh(
       new THREE.DodecahedronGeometry(size, 0),
-      Math.random() < 0.3 ? oreMat : rockMat
+      isOre ? oreMat : rockMat
     );
     rock.position.set(x, size * 0.6, z);
     rock.rotation.set(Math.random(), Math.random(), Math.random());
     rock.castShadow = true;
     rock.receiveShadow = true;
     scene.add(rock);
+    forageSources.push({
+      mesh: rock,
+      type: isOre ? 'ore_rock' : 'stone_rock',
+      harvestType: isOre ? 'ore' : 'stone',
+      cooldown: 0,
+      cooldownMax: 15.0,
+      charges: 2,
+      chargesMax: 2,
+    });
   }
   
   // Water biome (north): pond, reeds, fish
@@ -295,7 +360,7 @@ function createBiomes(scene) {
     scene.add(reed);
   }
   
-  // Swimming fish
+  // Swimming fish (harvestable fauna)
   const fishMat = new THREE.MeshStandardMaterial({
     color: '#78a8c4',
     roughness: 0.5,
@@ -317,7 +382,7 @@ function createBiomes(scene) {
     fish.add(tail);
     fish.castShadow = true;
     scene.add(fish);
-    fauna.push({
+    const fishFauna = {
       mesh: fish,
       biome: 'water',
       bounds: { minX: -7, maxX: 3, minZ: -16, maxZ: -6 },
@@ -325,10 +390,21 @@ function createBiomes(scene) {
       dir: Math.random() * Math.PI * 2,
       hopPhase: 0,
       swimPhase: Math.random() * Math.PI * 2,
+    };
+    fauna.push(fishFauna);
+    forageSources.push({
+      mesh: fish,
+      type: 'fish',
+      harvestType: 'fish',
+      cooldown: 0,
+      cooldownMax: 20.0,
+      charges: 1,
+      chargesMax: 1,
+      fauna: fishFauna,
     });
   }
   
-  return { fauna };
+  return { fauna, forageSources };
 }
 
 export function createWorld(canvas) {
@@ -408,6 +484,7 @@ export function createWorld(canvas) {
   const pickups = [];
   const buildings = [];
   const fauna = biomes.fauna;
+  const forageSources = biomes.forageSources;
 
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -425,6 +502,7 @@ export function createWorld(canvas) {
     pickups,
     buildings,
     fauna,
+    forageSources,
     sun,
     render() {
       renderer.render(scene, camera);

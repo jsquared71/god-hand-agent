@@ -116,6 +116,8 @@ Plain JS MLP — **no TensorFlow**.
 - Empty world + empty inventory + nothing built → force idle, skip the net
 - Session-only REINFORCE weight nudges: +eat, −starve, +successful craft/build
 - Hunger drains over time. At 0 the agent gets sluggish and collapses to an idle-hungry wait. No game-over screen.
+- **Agent only seeks/eats food when hunger ≤ 75%** — when above 75%, it prioritizes gathering materials, crafting, and building instead of eating.
+- **World resources regenerate slowly** — forage sources (bushes, trees, rocks, fish) regain charges one at a time after harvest, and initial ground pickups respawn at their origin after collection. Player-dropped items do not regenerate.
 
 ## Swap in Meshy GLBs
 

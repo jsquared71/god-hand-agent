@@ -47,12 +47,22 @@ if (autosave) {
 }
 
 function spawnInitialFood() {
-  spawnPickup(world, assets, 'berry', { x: 7, z: 2 }, { falling: false });
-  spawnPickup(world, assets, 'berry', { x: 9, z: -3 }, { falling: false });
-  spawnPickup(world, assets, 'grain', { x: 5, z: 1 }, { falling: false });
-  spawnPickup(world, assets, 'grain', { x: 8, z: -1 }, { falling: false });
-  spawnPickup(world, assets, 'fish', { x: -1, z: -9 }, { falling: false });
-  spawnPickup(world, assets, 'fish', { x: -3, z: -13 }, { falling: false });
+  const foodSpawns = [
+    { type: 'berry', x: 7, z: 2 },
+    { type: 'berry', x: 9, z: -3 },
+    { type: 'grain', x: 5, z: 1 },
+    { type: 'grain', x: 8, z: -1 },
+    { type: 'fish', x: -1, z: -9 },
+    { type: 'fish', x: -3, z: -13 },
+  ];
+  
+  for (const spawn of foodSpawns) {
+    spawnPickup(world, assets, spawn.type, { x: spawn.x, z: spawn.z }, { 
+      falling: false, 
+      isWorldSpawned: true,
+      spawnOrigin: { x: spawn.x, z: spawn.z }
+    });
+  }
 }
 
 // Setup save/load buttons

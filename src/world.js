@@ -148,7 +148,7 @@ function createBiomes(scene) {
       type: 'berry',
       harvestType: 'berry',
       cooldown: 0,
-      cooldownMax: 8.0,
+      cooldownMax: 30.0, // 30s per charge regeneration
       charges: 3,
       chargesMax: 3,
     });
@@ -198,7 +198,7 @@ function createBiomes(scene) {
       type: 'grain',
       harvestType: 'grain',
       cooldown: 0,
-      cooldownMax: 10.0,
+      cooldownMax: 35.0, // 35s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -248,7 +248,7 @@ function createBiomes(scene) {
       type: 'mushroom',
       harvestType: 'berry', // Mushrooms yield berry equivalent
       cooldown: 0,
-      cooldownMax: 12.0,
+      cooldownMax: 40.0, // 40s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -320,7 +320,7 @@ function createBiomes(scene) {
       type: 'tree',
       harvestType: 'wood',
       cooldown: 0,
-      cooldownMax: 12.0,
+      cooldownMax: 35.0, // 35s per charge regeneration
       charges: 3,
       chargesMax: 3,
     });
@@ -349,7 +349,7 @@ function createBiomes(scene) {
       type: 'log',
       harvestType: 'wood',
       cooldown: 0,
-      cooldownMax: 8.0,
+      cooldownMax: 25.0, // 25s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -419,7 +419,7 @@ function createBiomes(scene) {
       type: isOre ? 'ore_rock' : 'stone_rock',
       harvestType: isOre ? 'ore' : 'stone',
       cooldown: 0,
-      cooldownMax: 15.0,
+      cooldownMax: 45.0, // 45s per charge regeneration (slower for minerals)
       charges: 2,
       chargesMax: 2,
     });
@@ -514,7 +514,7 @@ function createBiomes(scene) {
       type: 'fish',
       harvestType: 'fish',
       cooldown: 0,
-      cooldownMax: 20.0,
+      cooldownMax: 60.0, // 60s per charge regeneration (slowest - fish take time to "respawn")
       charges: 1,
       chargesMax: 1,
       fauna: fishFauna,

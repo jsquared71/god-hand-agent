@@ -352,6 +352,80 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     return null;
   }
 
+  function separateFromOthers() {
+    // Push this agent away from other agents to maintain personal space
+    if (!world.agents) return;
+    
+    const MIN_DISTANCE = 0.95; // Minimum center distance on XZ plane
+    
+    for (const other of world.agents) {
+      if (other.group === group) continue; // Skip self
+      
+      const dx = group.position.x - other.group.position.x;
+      const dz = group.position.z - other.group.position.z;
+      const dist = Math.hypot(dx, dz);
+      
+      if (dist < MIN_DISTANCE) {
+        // Calculate push direction
+        let pushX, pushZ;
+        
+        if (dist < 0.01) {
+          // Nearly coincident - use stable offset based on name
+          const offset = (state.name.charCodeAt(0) * 0.1) % (Math.PI * 2);
+          pushX = Math.cos(offset);
+          pushZ = Math.sin(offset);
+        } else {
+          // Push away from other agent
+          pushX = dx / dist;
+          pushZ = dz / dist;
+        }
+        
+        // Soft push: move half the overlap distance this frame
+        const overlap = MIN_DISTANCE - dist;
+        const pushAmount = overlap * 0.5;
+        
+        group.position.x += pushX * pushAmount;
+        group.position.z += pushZ * pushAmount;
+      }
+    }
+  }
+  
+  function getSideSlotTarget(targetX, targetZ) {
+    // Check if another agent is already at or heading to this target
+    if (!world.agents) return { x: targetX, z: targetZ };
+    
+    for (const other of world.agents) {
+      if (other.group === group) continue; // Skip self
+      
+      const otherDist = Math.hypot(other.group.position.x - targetX, other.group.position.z - targetZ);
+      
+      // If another agent is close to the target, offset to a side slot
+      if (otherDist < 1.2) {
+        // Calculate approach vector from this agent to target
+        const approachDx = targetX - group.position.x;
+        const approachDz = targetZ - group.position.z;
+        const approachDist = Math.hypot(approachDx, approachDz);
+        
+        if (approachDist > 0.1) {
+          // Perpendicular offset (rotate approach vector by 90 degrees)
+          const perpX = -approachDz / approachDist;
+          const perpZ = approachDx / approachDist;
+          
+          // Decide which side based on agent name for stability
+          const side = (state.name.charCodeAt(0) % 2) === 0 ? 1 : -1;
+          const offsetDistance = 0.8;
+          
+          return {
+            x: targetX + perpX * offsetDistance * side,
+            z: targetZ + perpZ * offsetDistance * side,
+          };
+        }
+      }
+    }
+    
+    return { x: targetX, z: targetZ };
+  }
+
   function walkToward(x, z, dt, speed) {
     const dx = x - group.position.x;
     const dz = z - group.position.z;
@@ -364,6 +438,10 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     state.facing = yaw;
     group.rotation.y = yaw;
     state.walkPhase += dt * 9 * (speed / 2.2);
+    
+    // Apply separation after movement
+    separateFromOthers();
+    
     return dist - step;
   }
 
@@ -610,14 +688,16 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       const useForage = !food || (forageFood && s.forageFood.dist < s.food.dist);
       
       if (useForage && forageFood) {
-        const remain = walkToward(forageFood.mesh.position.x, forageFood.mesh.position.z, dt, speed);
+        const target = getSideSlotTarget(forageFood.mesh.position.x, forageFood.mesh.position.z);
+        const remain = walkToward(target.x, target.z, dt, speed);
         if (remain < FORAGE_RADIUS) {
           startForage(forageFood);
           return false;
         }
         return true;
       } else if (food) {
-        const remain = walkToward(food.mesh.position.x, food.mesh.position.z, dt, speed);
+        const target = getSideSlotTarget(food.mesh.position.x, food.mesh.position.z);
+        const remain = walkToward(target.x, target.z, dt, speed);
         if (remain < PICKUP_RADIUS) {
           startEat(food.type, food);
           return false;
@@ -637,7 +717,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         return false;
       }
       if (s.food.item) {
-        const remain = walkToward(s.food.item.mesh.position.x, s.food.item.mesh.position.z, dt, speed);
+        const target = getSideSlotTarget(s.food.item.mesh.position.x, s.food.item.mesh.position.z);
+        const remain = walkToward(target.x, target.z, dt, speed);
         if (remain < PICKUP_RADIUS) startEat(s.food.item.type, s.food.item);
         return remain >= PICKUP_RADIUS;
       }
@@ -687,7 +768,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         return false;
       }
       
-      const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+      const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
+      const remain = walkToward(target.x, target.z, dt, speed);
       if (isForage) {
         if (remain < FORAGE_RADIUS) startForage(bestTarget);
       } else {
@@ -735,7 +817,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
         
         if (bestTarget) {
-          const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+          const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
           if (isForage) {
             if (remain < FORAGE_RADIUS) startForage(bestTarget);
           } else {
@@ -751,7 +834,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       const bestDist = Math.min(wb.dist, fire.dist);
       const bestTarget = wb.dist < fire.dist ? wb : fire;
       if (bestTarget.item && bestDist > Math.max(WORKBENCH_RADIUS, FIRE_RADIUS) * 0.8) {
-        walkToward(bestTarget.item.mesh.position.x, bestTarget.item.mesh.position.z, dt, speed);
+        const target = getSideSlotTarget(bestTarget.item.mesh.position.x, bestTarget.item.mesh.position.z);
+        walkToward(target.x, target.z, dt, speed);
         return true;
       }
       const input = Object.keys(PROCESS).find((k) => canProcessInput(k));
@@ -808,7 +892,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
         
         if (bestTarget) {
-          const remain = walkToward(bestTarget.mesh.position.x, bestTarget.mesh.position.z, dt, speed);
+          const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
           if (isForage) {
             if (remain < FORAGE_RADIUS) startForage(bestTarget);
           } else {
@@ -925,6 +1010,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const walking = act(dt);
     animate(dt, walking);
     updateHud();
+    
+    // Apply separation even when standing still
+    separateFromOthers();
   }
 
   return { group, state, brain, update };

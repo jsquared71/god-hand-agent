@@ -55,6 +55,9 @@ agent2.group.position.set(1.5, 2.4, 0.8);
 
 const agents = [agent1, agent2];
 
+// Register agents on world so they can see each other for collision
+world.agents = agents;
+
 const drop = setupDrop(world, assets, cam, gameState);
 setupToolbar(drop, gameState);
 setupRecipeHud(notebook);

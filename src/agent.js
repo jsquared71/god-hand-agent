@@ -94,6 +94,7 @@ export function createAgent(world, assets) {
     const forageWood = nearestForageSource(world, group.position, ['wood']);
     const forageOre = nearestForageSource(world, group.position, ['ore']);
     const forageStone = nearestForageSource(world, group.position, ['stone']);
+    const forageWater = nearestForageSource(world, group.position, ['water']);
     
     return {
       food,
@@ -107,6 +108,7 @@ export function createAgent(world, assets) {
       forageWood,
       forageOre,
       forageStone,
+      forageWater,
       hasHut: world.buildings.some((b) => b.type === 'hut'),
       hasWorkbench: world.buildings.some((b) => b.type === 'workbench'),
       hasForageSources: world.forageSources && world.forageSources.some((s) => s.charges > 0),
@@ -184,6 +186,9 @@ export function createAgent(world, assets) {
     if (name === 'eat' && hasAnyFood(s) && state.hunger <= HUNGER_FOOD_THRESHOLD) shape += 0.05;
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
+    // Encourage tool crafting when lacking tools and needing wood/stone/ore
+    if (!state.hasTools && name === 'build' && nextBuild() === 'tools') shape += 0.12;
+    if (!state.hasTools && name === 'process' && state.inventory.ore >= 2) shape += 0.08; // Encourage smelting ore for tools
     if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
     if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
@@ -294,7 +299,7 @@ export function createAgent(world, assets) {
   }
 
   function startForage(source) {
-    state.busy = { kind: 'forage', t: 0, dur: 1.2, source };
+    state.busy = { kind: 'forage', t: 0, dur: 1.2, source, hasTools: state.hasTools };
   }
 
   function finishBusy() {
@@ -341,7 +346,7 @@ export function createAgent(world, assets) {
       }
       brain.reinforce(1.15);
     } else if (b.kind === 'forage') {
-      const harvested = harvestForageSource(world, assets, b.source, group.position);
+      const harvested = harvestForageSource(world, assets, b.source, group.position, b.hasTools || false);
       if (harvested) {
         brain.reinforce(0.6);
       }
@@ -473,6 +478,7 @@ export function createAgent(world, assets) {
         const forageWood = s.forageWood.item;
         const forageGrain = nearestForageSource(world, group.position, ['grain']).item;
         const forageFood = s.forageFood.item;
+        const forageWater = s.forageWater.item;
         
         let bestTarget = null;
         let bestDist = Infinity;
@@ -496,6 +502,11 @@ export function createAgent(world, assets) {
         if (forageFood && s.forageFood.dist < bestDist) {
           bestTarget = forageFood;
           bestDist = s.forageFood.dist;
+          isForage = true;
+        }
+        if (forageWater && s.forageWater.dist < bestDist) {
+          bestTarget = forageWater;
+          bestDist = s.forageWater.dist;
           isForage = true;
         }
         

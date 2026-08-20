@@ -263,20 +263,43 @@ export function nearestForageSource(world, origin, harvestTypes) {
   return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
 }
 
-export function harvestForageSource(world, assets, source, agentPos) {
+export function harvestForageSource(world, assets, source, agentPos, hasTools = false) {
   if (!source || source.charges <= 0) return null;
-  source.charges -= 1;
+  
+  const harvestType = source.harvestType;
+  const isWoodOrStone = ['wood', 'stone', 'ore'].includes(harvestType);
+  
+  // Tools provide benefits for wood/stone/ore gathering
+  let chargesCost = 1;
+  let yieldMultiplier = 1;
+  
+  if (isWoodOrStone && hasTools) {
+    // With tools: harvest is more efficient
+    yieldMultiplier = 2; // Get 2 items instead of 1
+  } else if (isWoodOrStone && !hasTools) {
+    // Without tools: gathering wood/stone/ore is slower (costs 2 charges for 1 item)
+    // This makes the agent want to craft tools
+    chargesCost = Math.min(2, source.charges); // Take up to 2 charges
+  }
+  
+  source.charges = Math.max(0, source.charges - chargesCost);
   if (source.charges === 0) {
     source.cooldown = source.cooldownMax;
   }
-  // Spawn pickup at agent's feet - mark as world-spawned since it came from a forage source
-  spawnPickup(world, assets, source.harvestType, {
-    x: agentPos.x,
-    z: agentPos.z,
-  }, { 
-    falling: false, 
-    isWorldSpawned: true,
-    spawnOrigin: { x: agentPos.x, z: agentPos.z }
-  });
-  return source.harvestType;
+  
+  // Spawn pickup(s) at agent's feet - mark as world-spawned since it came from a forage source
+  for (let i = 0; i < yieldMultiplier; i++) {
+    const offsetX = (Math.random() - 0.5) * 0.3;
+    const offsetZ = (Math.random() - 0.5) * 0.3;
+    spawnPickup(world, assets, harvestType, {
+      x: agentPos.x + offsetX,
+      z: agentPos.z + offsetZ,
+    }, { 
+      falling: false, 
+      isWorldSpawned: true,
+      spawnOrigin: { x: agentPos.x + offsetX, z: agentPos.z + offsetZ }
+    });
+  }
+  
+  return harvestType;
 }

@@ -81,12 +81,12 @@ Dropped world items are pickups. The agent walks to them, eats food in place, an
 
 ## Biomes
 
-The world contains four distinct biomes around the spawn point:
+The world contains four distinct biomes around the spawn point. **Each world is randomly generated** — biome layouts, resource positions, and counts vary on every fresh start, but the same seed produces the same world:
 
 - **Meadow** (center/east): Grass tufts, berry bushes, grain stalks, wandering rabbits
 - **Forest** (west): Low-poly trees, fallen logs, deer
 - **Rocky** (south): Boulders, ore rocks, sparse vegetation
-- **Water** (north): Pond with reeds and swimming fish (can be collected)
+- **Water** (north): Pond with reeds and swimming fish (can be collected); agent can gather water from pond edge
 
 Flora and fauna are mostly decorative with some harvestable pickups (e.g., fish in the pond).
 
@@ -97,13 +97,16 @@ The agent can forage food and materials directly from biome sources instead of r
 - **Berry bushes** (meadow) yield berries — green bushes with clusters of visible red berries
 - **Grain patches** (meadow) yield grain — golden wheat stalks in small patches
 - **Mushroom clusters** (meadow edges) yield food — orange-capped mushrooms
-- **Trees and logs** (forest) yield wood
-- **Stone boulders and ore rocks** (rocky) yield stone or ore
+- **Trees and logs** (forest) yield wood — **tools provide 2× yield and faster gathering**
+- **Stone boulders and ore rocks** (rocky) yield stone or ore — **tools provide 2× yield; without tools gathering costs 2 charges for 1 item**
 - **Swimming fish** (pond) yield fish — blue and orange fish swimming in the water
+- **Pond water** — agent can gather water directly from the pond's edge; no well required (wells remain as a convenience)
 
 When hungry or short on materials, the agent will walk to the nearest harvestable source, perform a brief gathering animation, and collect the resource. Forage sources have charges and cooldowns—they don't vanish immediately but regenerate after being depleted, keeping the world sustainable. The agent seamlessly chooses between foraged sources and player-dropped pickups based on proximity and need.
 
 Food sources are visually distinct and recognizable: berry bushes have red berries, grain patches are golden, mushrooms have orange caps, and fish are colorful and visible in the pond. A few food pickups spawn on the ground at world start so food is immediately visible.
+
+**Crafting tools (2 ingots) gives the agent faster gathering and better yields from trees, rocks, and ore.**
 
 ## Agent brain
 
@@ -149,6 +152,7 @@ The game includes a full save/load system to preserve your world and the agent's
 - All built structures (hut, fire, workbench, well, chest)
 - Forage source charges and cooldowns
 - Camera position
+- World seed (for consistent world layout on reload)
 - Format version for future compatibility
 
 On page load, if an autosave exists in localStorage, you'll be prompted to restore it. Otherwise, the world starts fresh with a few food pickups scattered on the ground.

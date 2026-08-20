@@ -15,7 +15,20 @@ import {
 } from './save.js';
 
 const canvas = document.getElementById('game');
-const world = createWorld(canvas);
+
+// Check for localStorage autosave and use its seed if restoring
+const autosave = loadFromLocalStorage();
+let worldSeed = null;
+if (autosave) {
+  const restore = confirm(
+    `Found autosave from ${new Date(autosave.timestamp).toLocaleString()}. Restore it?`
+  );
+  if (restore) {
+    worldSeed = autosave.seed || null; // Use saved seed
+  }
+}
+
+const world = createWorld(canvas, worldSeed);
 const cam = setupControls(world);
 const assets = new AssetLibrary();
 
@@ -29,20 +42,11 @@ const drop = setupDrop(world, assets, cam);
 setupToolbar(drop);
 setupRecipeHud();
 
-// Check for localStorage autosave and offer to restore
-const autosave = loadFromLocalStorage();
-if (autosave) {
-  const restore = confirm(
-    `Found autosave from ${new Date(autosave.timestamp).toLocaleString()}. Restore it?`
-  );
-  if (restore) {
-    deserializeWorld(autosave, world, agent, assets, world.camera);
-  } else {
-    // Spawn initial food pickups if not restoring
-    spawnInitialFood();
-  }
+// Restore world state if autosave was confirmed
+if (autosave && worldSeed !== null) {
+  deserializeWorld(autosave, world, agent, assets, world.camera);
 } else {
-  // Spawn initial food pickups
+  // Spawn initial food pickups for new world
   spawnInitialFood();
 }
 

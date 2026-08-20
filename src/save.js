@@ -13,6 +13,7 @@ export function serializeWorld(world, agent, camera) {
   const state = {
     version: SAVE_VERSION,
     timestamp: Date.now(),
+    seed: world.seed || Date.now(),
     agent: {
       position: { x: agent.group.position.x, y: agent.group.position.y, z: agent.group.position.z },
       facing: agent.state.facing,

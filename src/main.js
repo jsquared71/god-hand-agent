@@ -44,12 +44,12 @@ const notebook = new DiscoveryNotebook();
 
 // Create two agents with slightly different priors
 const agent1 = createAgent(world, assets, {
-  b2: [0.15, 0.1, 0.05, 0.35, 0.08, -0.05, 0.12], // Slightly more builder-biased, with combine
+  b2: [0.15, 0.05, 0.0, 0.42, 0.1, -0.05, 0.15], // Ava: lower seek_food/eat, higher seek_material
 }, notebook, 'Ava');
 agent1.group.position.set(0, 2.4, 0);
 
 const agent2 = createAgent(world, assets, {
-  b2: [0.1, 0.15, 0.08, 0.4, 0.05, -0.1, 0.15], // More forager-biased, more experimental
+  b2: [0.1, 0.08, 0.0, 0.38, 0.08, -0.1, 0.18], // Bo: similar adjustments, more experimental
 }, notebook, 'Bo');
 agent2.group.position.set(1.5, 2.4, 0.8);
 

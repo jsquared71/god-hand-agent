@@ -95,12 +95,12 @@ export class Brain {
     } else {
       // Default priors so the first minutes aren't pure noise.
       this.b2[0] = 0.15; // idle
-      this.b2[1] = 0.1; // seek_food (further reduced - let hunger drive this)
-      this.b2[2] = 0.05; // eat
-      this.b2[3] = 0.35; // seek_material (prioritize gathering)
-      this.b2[4] = 0.08; // process
+      this.b2[1] = 0.08; // seek_food (reduced from 0.1)
+      this.b2[2] = 0.0; // eat (reduced from 0.05)
+      this.b2[3] = 0.4; // seek_material (increased from 0.35)
+      this.b2[4] = 0.1; // process (increased from 0.08)
       this.b2[5] = -0.05; // build
-      this.b2[6] = 0.12; // combine (encourage experimentation)
+      this.b2[6] = 0.15; // combine (increased from 0.12)
     }
     
     this.last = null;

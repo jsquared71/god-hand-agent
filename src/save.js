@@ -9,7 +9,7 @@ const AUTOSAVE_INTERVAL_MS = 15000; // 15 seconds
 
 let autosaveTimer = null;
 
-export function serializeWorld(world, agents, camera, gameState) {
+export function serializeWorld(world, agents, camera, gameState, notebook = null) {
   const state = {
     version: SAVE_VERSION,
     timestamp: Date.now(),
@@ -23,6 +23,7 @@ export function serializeWorld(world, agents, camera, gameState) {
       favorMax: gameState.favorMax,
       favorRegenRate: gameState.favorRegenRate,
     },
+    notebook: notebook ? notebook.serialize() : null,
     agents: agents.map(agent => ({
       position: { x: agent.group.position.x, y: agent.group.position.y, z: agent.group.position.z },
       facing: agent.state.facing,
@@ -74,7 +75,7 @@ export function serializeWorld(world, agents, camera, gameState) {
   return state;
 }
 
-export function deserializeWorld(state, world, agents, assets, camera, gameState) {
+export function deserializeWorld(state, world, agents, assets, camera, gameState, notebook = null) {
   if (state.version !== SAVE_VERSION) {
     console.warn(`Save version mismatch: expected ${SAVE_VERSION}, got ${state.version}`);
   }
@@ -90,6 +91,11 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
     gameState.favor = state.gameState.favor ?? 10;
     gameState.favorMax = state.gameState.favorMax ?? 20;
     gameState.favorRegenRate = state.gameState.favorRegenRate ?? 0.05;
+  }
+  
+  // Restore notebook
+  if (notebook && state.notebook) {
+    notebook.deserialize(state.notebook);
   }
 
   // Restore agents
@@ -233,8 +239,8 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
   console.log('World loaded successfully');
 }
 
-export function saveToFile(world, agents, camera, gameState) {
-  const state = serializeWorld(world, agents, camera, gameState);
+export function saveToFile(world, agents, camera, gameState, notebook = null) {
+  const state = serializeWorld(world, agents, camera, gameState, notebook);
   const json = JSON.stringify(state, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const filename = `god-hand-save-${Date.now()}.json`;
@@ -279,7 +285,7 @@ function downloadBlob(blob, filename) {
   console.log('Saved via download');
 }
 
-export function loadFromFile(world, agents, assets, camera, gameState) {
+export function loadFromFile(world, agents, assets, camera, gameState, notebook = null) {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -293,7 +299,7 @@ export function loadFromFile(world, agents, assets, camera, gameState) {
       try {
         const text = await file.text();
         const state = JSON.parse(text);
-        deserializeWorld(state, world, agents, assets, camera, gameState);
+        deserializeWorld(state, world, agents, assets, camera, gameState, notebook);
         resolve(state);
       } catch (err) {
         console.error('Failed to load file:', err);
@@ -333,10 +339,10 @@ export function clearLocalStorage() {
   }
 }
 
-export function startAutosave(world, agents, camera, gameState) {
+export function startAutosave(world, agents, camera, gameState, notebook = null) {
   stopAutosave();
   autosaveTimer = setInterval(() => {
-    const state = serializeWorld(world, agents, camera, gameState);
+    const state = serializeWorld(world, agents, camera, gameState, notebook);
     saveToLocalStorage(state);
   }, AUTOSAVE_INTERVAL_MS);
   console.log(`Autosave enabled (every ${AUTOSAVE_INTERVAL_MS / 1000}s)`);

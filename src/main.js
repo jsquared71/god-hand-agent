@@ -5,7 +5,7 @@ import { setupToolbar } from './toolbar.js';
 import { createAgent } from './agent.js';
 import { AssetLibrary } from './assets.js';
 import { updateWorldItems, spawnPickup } from './resources.js';
-import { setupRecipeHud } from './recipes.js';
+import { setupRecipeHud, updateRecipeHud } from './recipes.js';
 import {
   saveToFile,
   loadFromFile,
@@ -14,6 +14,7 @@ import {
   deserializeWorld,
 } from './save.js';
 import { startFireCrackle, stopFireCrackle } from './audio.js';
+import { DiscoveryNotebook } from './discovery.js';
 
 const canvas = document.getElementById('game');
 
@@ -45,26 +46,30 @@ const gameState = {
   favorRegenRate: 0.05, // Base regen per second
 };
 
+// Create discovery notebook (shared between agents)
+const notebook = new DiscoveryNotebook();
+
 // Create two agents with slightly different priors
 const agent1 = createAgent(world, assets, {
-  b2: [0.15, 0.15, 0.05, 0.35, 0.08, 0.05], // Slightly more builder-biased
-});
+  b2: [0.15, 0.1, 0.05, 0.35, 0.08, -0.05, 0.12], // Slightly more builder-biased, with combine
+}, notebook);
 agent1.group.position.set(0, 2.4, 0);
 
 const agent2 = createAgent(world, assets, {
-  b2: [0.1, 0.2, 0.08, 0.4, 0.05, -0.1], // More forager-biased
-});
+  b2: [0.1, 0.15, 0.08, 0.4, 0.05, -0.1, 0.15], // More forager-biased, more experimental
+}, notebook);
 agent2.group.position.set(1.5, 2.4, 0.8);
 
 const agents = [agent1, agent2];
 
 const drop = setupDrop(world, assets, cam, gameState);
 setupToolbar(drop, gameState);
-setupRecipeHud();
+setupRecipeHud(notebook);
 
 // Restore world state if autosave was confirmed
 if (autosave && worldSeed !== null) {
-  deserializeWorld(autosave, world, agents, assets, world.camera, gameState);
+  deserializeWorld(autosave, world, agents, assets, world.camera, gameState, notebook);
+  updateRecipeHud(notebook);
 } else {
   // Spawn initial food pickups for new world
   spawnInitialFood();
@@ -95,14 +100,15 @@ const loadBtn = document.getElementById('load-btn');
 
 if (saveBtn) {
   saveBtn.addEventListener('click', () => {
-    saveToFile(world, agents, world.camera, gameState);
+    saveToFile(world, agents, world.camera, gameState, notebook);
   });
 }
 
 if (loadBtn) {
   loadBtn.addEventListener('click', async () => {
     try {
-      await loadFromFile(world, agents, assets, world.camera, gameState);
+      await loadFromFile(world, agents, assets, world.camera, gameState, notebook);
+      updateRecipeHud(notebook);
     } catch (err) {
       if (err.message !== 'No file selected') {
         alert('Failed to load save file. Check console for details.');
@@ -115,12 +121,12 @@ if (loadBtn) {
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 's') {
     e.preventDefault();
-    saveToFile(world, agents, world.camera, gameState);
+    saveToFile(world, agents, world.camera, gameState, notebook);
   }
 });
 
-// Start autosave timer
-startAutosave(world, agents, world.camera, gameState);
+// Start autosave timer (need to update this function signature)
+startAutosave(world, agents, world.camera, gameState, notebook);
 
 let last = performance.now();
 
@@ -185,6 +191,12 @@ function frame(now) {
   for (const agent of agents) {
     agent.update(dt);
   }
+  
+  // Update recipe HUD periodically (every ~60 frames)
+  if (Math.random() < 0.016) {
+    updateRecipeHud(notebook);
+  }
+  
   world.render();
   requestAnimationFrame(frame);
 }

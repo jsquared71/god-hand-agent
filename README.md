@@ -1,6 +1,12 @@
 # God Hand — Agent Sandbox
 
-A Three.js god-hand sandbox. You never steer the creatures. You drop raw resources from a toolbar using **Favor**; two tiny neural-net agents eat, craft, and build with whatever you give them.
+A Three.js god-hand sandbox with **open-ended invention**. You never steer the creatures. You drop raw resources from a toolbar using **Favor**; two tiny neural-net agents eat, craft, and build with whatever you give them.
+
+## Design Philosophy
+
+**As few rules as possible.** Agents figure out tasks through need-based rewards (hunger, warmth, faster gathering) — not scripted "if hungry, do X" logic. 
+
+**Unbounded technology.** No closed recipe list. Agents combine any two items to discover new types with procedurally derived properties. Tools, weapons, devices, and vehicles emerge from tag-based combinations with no designer ceiling on what can exist.
 
 The world starts **empty**. If nothing has been dropped, the inventory is empty, and nothing has been built, the brain is skipped and agents stay idle.
 
@@ -122,39 +128,22 @@ This is Three.js `OrbitControls` (left = rotate, right = pan, wheel = dolly). Ro
 
 There is no WASD / keyboard camera.
 
-## Recipes
+## Discovery & Combination
 
-**Eat**
+Agents can **combine any two inventory items** to create new objects. The system never returns "invalid recipe" — every combination produces something, though usefulness varies.
 
-| Food | Time | Hunger | Notes |
-|---|---|---|---|
-| Water | quick | tiny | Light refreshment |
-| Berry | quick | small | Raw food |
-| Fish | medium | small | Raw fish |
-| Grain | slower | medium | Raw grain |
-| Bread | agent-made | high | Cooked grain + water |
-| Cooked Fish | agent-made | high | Best near fire |
-| Stew | agent-made | best | Berry + water, best near fire |
+**Discovered recipes persist** in the world's notebook (saved with your game). The Recipes HUD (right side) lists only what has been discovered, starting nearly empty. Watch it grow as agents experiment.
 
-**Process** (agent; faster at a workbench, some faster near fire, faster still with tools)
+**Seed recipes** work from the start (e.g., wood + stone → crude tool, grain + water → bread, ore + fire → ingot, ingot + wood → better tools). After that, unknown pairs still produce *something* with blended tags and procedural properties.
 
-- wood → planks
-- ore → ingot
-- grain + water → bread
-- berry + water → stew (faster near fire)
-- fish → cooked fish (faster near fire)
-- planks → sticks (1 → 2) — only after workbench, hut, well, and chest are built
+**Item properties come from tags:**
+- Food, fuel, sharp, structural, vessel, mobile, metal, fiber, container, light, weapon, vehicle
+- Tags determine behavior: gatherMult (faster harvesting), damage, speed boost, capacity, hunger value
+- Tools/weapons/devices/vehicles are just items with those tags — no hard categories
 
-**Build** (agent spends inventory)
+**Buildings** remain discrete (hut, workbench, fire, well, chest) but can also be discovered through structural + container or structural + mobile combinations.
 
-- 2 planks → workbench (speeds processing)
-- 3 planks + 2 stone → hut (hunger drains slower when the agent is near / inside)
-- 2 wood + 1 stone → campfire (speeds cooking)
-- 3 stone + 1 plank → well (slowly produces water pickups)
-- 3 planks → chest (storage decoration)
-- 2 ingots → tools (held buff: process speed)
-
-Dropped world items are pickups. The agent walks to them, eats food in place, and carries materials.
+**Agents learn through needs:** hunger reduction, warmth at night, successful combinations (small curiosity bonus on first discovery), faster gathering with better tools. No "you must build X next" scripts.
 
 ## Biomes
 
@@ -189,16 +178,16 @@ Food sources are visually distinct and recognizable: berry bushes have red berri
 
 Plain JS MLP — **no TensorFlow**.
 
-- 20 inputs (hunger, energy, inventory counts, nearest distances, building flags)
+- 22 inputs (hunger, energy, inventory counts, nearest distances, building flags, tag presence flags)
 - 16 hidden units, `tanh`
-- 6 outputs, softmax: `idle`, `seek_food`, `eat`, `seek_material`, `process`, `build`
+- 7 outputs, softmax: `idle`, `seek_food`, `eat`, `seek_material`, `process`, `build`, `combine`
 - Forward pass a few times per second, not every frame
 - Empty world + empty inventory + nothing built → force idle, skip the net
-- Session-only REINFORCE weight nudges: +eat, −starve, +successful craft/build
+- Session-only REINFORCE weight nudges: hunger reduction, successful craft/build, curiosity bonus for first-time discoveries
+- **Minimal policy:** No hardcoded "must eat when hunger > X" or "cannot make sticks until Y buildings exist." Needs (hunger, cold, faster gathering) drive behavior through rewards, not code gates.
 - Hunger drains over time. At 0 the agent gets sluggish and collapses to an idle-hungry wait. No game-over screen.
 - **Cold at night**: Hunger drains 3× faster if the agent is not near a hut or campfire
-- **Agent only seeks/eats food when hunger ≤ 75%** — when above 75%, it prioritizes gathering materials, crafting, and building instead of eating.
-- **Two settlers** with slightly different action priors: one more builder-focused, one more forager-focused
+- **Two settlers** with slightly different action priors: one more builder-focused, one more experimental. Both share the discovered-recipe notebook.
 - **World resources regenerate slowly** — forage sources (bushes, trees, rocks, fish) regain charges one at a time after harvest, and initial ground pickups respawn at their origin after collection. Player-dropped items do not regenerate.
 
 ## Swap in Meshy GLBs

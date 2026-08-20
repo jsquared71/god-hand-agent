@@ -66,7 +66,7 @@ There is no WASD / keyboard camera.
 - grain + water → bread
 - berry + water → stew (faster near fire)
 - fish → cooked fish (faster near fire)
-- planks → sticks (1 → 2)
+- planks → sticks (1 → 2) — only after workbench, hut, well, and chest are built
 
 **Build** (agent spends inventory)
 

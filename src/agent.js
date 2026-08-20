@@ -202,8 +202,22 @@ export function createAgent(world, assets) {
     );
   }
 
+  function allPlankBuildingsExist() {
+    const hasWorkbench = world.buildings.some((b) => b.type === 'workbench');
+    const hasHut = world.buildings.some((b) => b.type === 'hut');
+    const hasWell = world.buildings.some((b) => b.type === 'well');
+    const hasChest = world.buildings.some((b) => b.type === 'chest');
+    return hasWorkbench && hasHut && hasWell && hasChest;
+  }
+
+  function canProcessInput(inputType) {
+    if (!canProcess(inputType, state.inventory)) return false;
+    if (inputType === 'planks' && !allPlankBuildingsExist()) return false;
+    return true;
+  }
+
   function canProcessAny() {
-    return Object.keys(PROCESS).some((k) => canProcess(k, state.inventory));
+    return Object.keys(PROCESS).some((k) => canProcessInput(k));
   }
 
   function nextBuild() {
@@ -530,7 +544,7 @@ export function createAgent(world, assets) {
         walkToward(bestTarget.item.mesh.position.x, bestTarget.item.mesh.position.z, dt, speed);
         return true;
       }
-      const input = Object.keys(PROCESS).find((k) => canProcess(k, state.inventory));
+      const input = Object.keys(PROCESS).find((k) => canProcessInput(k));
       if (input) startProcess(input);
       return false;
     }

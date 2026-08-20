@@ -266,7 +266,7 @@ body::after {
 
 #recipes-hud {
   position: fixed;
-  bottom: 120px;
+  bottom: 170px;
   left: 18px;
   z-index: 5;
   width: min(280px, calc(50vw - 24px));

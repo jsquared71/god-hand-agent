@@ -30,6 +30,8 @@ import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue } from './discove
 
 const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
+const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
+const MATERIAL_TYPES = ['wood', 'ore', 'stone', 'planks', 'ingot', 'grain'];
 
 export function createAgent(world, assets, priors = null, notebook = null) {
   const group = assets.create('agent');
@@ -249,7 +251,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
       }
     }
     // Fallback to known food types
-    const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
     return (
       FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
       !!(s && s.food.item) ||

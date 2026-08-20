@@ -19,18 +19,18 @@ const brain = new Brain();
 assert(brain.inputSize === INPUT_SIZE, 'input size');
 assert(brain.hiddenSize === HIDDEN_SIZE, 'hidden size');
 assert(brain.outputSize === OUTPUT_SIZE, 'output size');
-assert(ACTION_NAMES.length === 6, 'six actions');
+assert(ACTION_NAMES.length === 7, 'seven actions (added combine)');
 
 const zeros = new Array(INPUT_SIZE).fill(0);
 const fwd = brain.forward(zeros);
-assert(fwd.probs.length === 6, 'softmax length');
+assert(fwd.probs.length === 7, 'softmax length');
 const sum = [...fwd.probs].reduce((a, b) => a + b, 0);
 assert(Math.abs(sum - 1) < 1e-6, `softmax sums to 1 (got ${sum})`);
 assert([...fwd.probs].every((p) => p >= 0 && p <= 1), 'probs in [0,1]');
 
 const { action, name } = brain.act(zeros);
 assert(ACTION_NAMES.includes(name), 'sampled action name');
-assert(action >= 0 && action < 6, 'action index');
+assert(action >= 0 && action < 7, 'action index');
 
 const before = brain.W2[action * HIDDEN_SIZE];
 brain.reinforce(1.0);
@@ -95,8 +95,11 @@ const obs = encodeInputs({
   hasWorkbench: false,
   hasTools: false,
   starving: false,
+  hasSharp: false,
+  hasMetal: false,
+  hasVehicle: false,
 });
-assert(obs.length === 20, '20 inputs');
+assert(obs.length === 22, '22 inputs (added tag flags)');
 assert(obs.every((x) => typeof x === 'number' && Number.isFinite(x)), 'finite inputs');
 
 console.log('brain-sanity: ok');

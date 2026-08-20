@@ -27,13 +27,10 @@ import {
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
 
-const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
-const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain', 'water', 'fish', 'dough', 'sticks'];
 const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
-const HUNGER_FOOD_THRESHOLD = 0.75; // Only seek/eat food when hunger drops to or below 75%
 
-export function createAgent(world, assets, priors = null) {
+export function createAgent(world, assets, priors = null, notebook = null) {
   const group = assets.create('agent');
   group.position.set(0, 2.4, 0);
   world.scene.add(group);
@@ -46,6 +43,7 @@ export function createAgent(world, assets, priors = null) {
     energy: 1,
     inventory: emptyInventory(),
     hasTools: false,
+    bestGatherMult: 1.0,
     action: 'idle',
     actionIndex: 0,
     target: null,
@@ -57,6 +55,7 @@ export function createAgent(world, assets, priors = null) {
     thinkAcc: 0,
     sluggish: false,
     wantBubble: 'Idle',
+    notebook, // Reference to shared discovery notebook
   };
 
   const hud = {
@@ -153,6 +152,22 @@ export function createAgent(world, assets, priors = null) {
       return;
     }
 
+    // Compute tag flags
+    let hasSharp = false;
+    let hasMetal = false;
+    let hasVehicle = false;
+    
+    if (state.notebook) {
+      const { itemHasTag, TAGS } = require('./discovery.js');
+      for (const [itemId, count] of Object.entries(state.inventory)) {
+        if (count > 0) {
+          if (itemHasTag(itemId, TAGS.SHARP, state.notebook)) hasSharp = true;
+          if (itemHasTag(itemId, TAGS.METAL, state.notebook)) hasMetal = true;
+          if (itemHasTag(itemId, TAGS.VEHICLE, state.notebook)) hasVehicle = true;
+        }
+      }
+    }
+    
     const input = encodeInputs({
       hunger: state.hunger,
       energy: state.energy,
@@ -172,16 +187,12 @@ export function createAgent(world, assets, priors = null) {
       distForageWood: s.forageWood.dist,
       distForageOre: s.forageOre.dist,
       distForageStone: s.forageStone.dist,
+      hasSharp,
+      hasMetal,
+      hasVehicle,
     });
 
     let { action, name } = brain.act(input);
-    
-    // OVERRIDE: Do not allow seeking or eating food when hunger > 75%
-    if (state.hunger > HUNGER_FOOD_THRESHOLD && (name === 'seek_food' || name === 'eat')) {
-      // Force idle instead; let the brain learn to avoid food when full
-      action = 0; // idle
-      name = 'idle';
-    }
     
     state.actionIndex = action;
     state.action = name;
@@ -189,21 +200,14 @@ export function createAgent(world, assets, priors = null) {
     // Update want bubble based on action and state
     updateWantBubble(s);
 
-    // Reinforcement shaping: discourage food actions when above threshold
-    let shape = (state.hunger - 0.5) * 0.08;
-    if (state.hunger < 0.3) shape -= 0.15; // Strong penalty for being very hungry and not seeking food
-    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger <= HUNGER_FOOD_THRESHOLD) shape += 0.08;
-    if (name === 'seek_food' && state.hunger > HUNGER_FOOD_THRESHOLD) shape -= 0.2; // Strong penalty for seeking food when full
-    if (name === 'eat' && state.hunger > HUNGER_FOOD_THRESHOLD) shape -= 0.2; // Strong penalty for trying to eat when full
-    if (name === 'idle' && state.hunger < 0.3 && (s.food.item || s.forageFood.item)) shape -= 0.18;
-    if (name === 'eat' && hasAnyFood(s) && state.hunger <= HUNGER_FOOD_THRESHOLD) shape += 0.05;
+    // Minimal reinforcement shaping: needs-based only
+    let shape = 0;
+    if (state.hunger < 0.3) shape -= 0.15; // Penalty for being very hungry
+    if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
-    // Encourage tool crafting when lacking tools and needing wood/stone/ore
-    if (!state.hasTools && name === 'build' && nextBuild() === 'tools') shape += 0.12;
-    if (!state.hasTools && name === 'process' && state.inventory.ore >= 2) shape += 0.08; // Encourage smelting ore for tools
+    if (name === 'combine' && canCombineAny()) shape += 0.02;
     if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
-    if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
   }
   
@@ -222,6 +226,8 @@ export function createAgent(world, assets, priors = null) {
       state.wantBubble = 'Wants workbench';
     } else if (!s.hasHut) {
       state.wantBubble = 'Wants hut';
+    } else if (state.action === 'combine') {
+      state.wantBubble = 'Inventing';
     } else if (state.action === 'seek_material' || state.action === 'seek_food') {
       state.wantBubble = 'Gathering';
     } else if (state.action === 'process') {
@@ -236,25 +242,67 @@ export function createAgent(world, assets, priors = null) {
   }
 
   function hasAnyFood(s) {
+    // Check inventory for food items
+    if (state.notebook) {
+      const { isFood } = require('./discovery.js');
+      for (const [itemId, count] of Object.entries(state.inventory)) {
+        if (count > 0 && isFood(itemId, state.notebook)) return true;
+      }
+    }
+    // Fallback to known food types
+    const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish'];
     return (
       FOOD_TYPES.some((t) => (state.inventory[t] || 0) > 0) ||
       !!(s && s.food.item) ||
       !!(s && s.forageFood.item)
     );
   }
-
-  function allPlankBuildingsExist() {
-    const hasWorkbench = world.buildings.some((b) => b.type === 'workbench');
-    const hasHut = world.buildings.some((b) => b.type === 'hut');
-    const hasWell = world.buildings.some((b) => b.type === 'well');
-    const hasChest = world.buildings.some((b) => b.type === 'chest');
-    return hasWorkbench && hasHut && hasWell && hasChest;
+  
+  function canCombineAny() {
+    // Can combine if we have at least 2 different items with count > 0
+    const items = Object.entries(state.inventory).filter(([_, count]) => count > 0);
+    return items.length >= 2;
+  }
+  
+  function pickTwoCombineItems() {
+    // Pick two different items from inventory
+    const items = Object.entries(state.inventory)
+      .filter(([_, count]) => count > 0)
+      .map(([id, _]) => id);
+    
+    if (items.length < 2) return null;
+    
+    // Pick random two
+    const idx1 = Math.floor(Math.random() * items.length);
+    let idx2 = Math.floor(Math.random() * items.length);
+    while (idx2 === idx1 && items.length > 1) {
+      idx2 = Math.floor(Math.random() * items.length);
+    }
+    
+    return [items[idx1], items[idx2]];
+  }
+  
+  function updateBestGatherMult() {
+    if (!state.notebook) {
+      state.bestGatherMult = state.hasTools ? 2.0 : 1.0;
+      return;
+    }
+    
+    const { getGatherMult } = require('./discovery.js');
+    let best = 1.0;
+    
+    for (const [itemId, count] of Object.entries(state.inventory)) {
+      if (count > 0) {
+        const mult = getGatherMult(itemId, state.notebook);
+        if (mult > best) best = mult;
+      }
+    }
+    
+    state.bestGatherMult = best;
   }
 
   function canProcessInput(inputType) {
-    if (!canProcess(inputType, state.inventory)) return false;
-    if (inputType === 'planks' && !allPlankBuildingsExist()) return false;
-    return true;
+    return canProcess(inputType, state.inventory);
   }
 
   function canProcessAny() {
@@ -277,14 +325,31 @@ export function createAgent(world, assets, priors = null) {
   }
 
   function bestInvFood() {
-    if (state.inventory.stew > 0) return 'stew';
-    if (state.inventory.cooked_fish > 0) return 'cooked_fish';
-    if (state.inventory.bread > 0) return 'bread';
-    if (state.inventory.fish > 0) return 'fish';
-    if (state.inventory.berry > 0) return 'berry';
-    if (state.inventory.grain > 0 && state.hunger < 0.4) return 'grain';
-    if (state.inventory.grain > 0) return 'grain';
-    if (state.inventory.water > 0) return 'water';
+    // Prioritize known good foods first
+    const knownOrder = ['stew', 'cooked_fish', 'bread', 'fish', 'berry', 'grain', 'water'];
+    for (const foodId of knownOrder) {
+      if ((state.inventory[foodId] || 0) > 0) return foodId;
+    }
+    
+    // Check discovered food items
+    if (state.notebook) {
+      const { isFood, getFoodValue } = require('./discovery.js');
+      let best = null;
+      let bestHunger = 0;
+      
+      for (const [itemId, count] of Object.entries(state.inventory)) {
+        if (count > 0 && isFood(itemId, state.notebook)) {
+          const foodVal = getFoodValue(itemId, state.notebook);
+          if (foodVal && foodVal.hunger > bestHunger) {
+            best = itemId;
+            bestHunger = foodVal.hunger;
+          }
+        }
+      }
+      
+      if (best) return best;
+    }
+    
     return null;
   }
 
@@ -349,7 +414,22 @@ export function createAgent(world, assets, priors = null) {
   }
 
   function startEat(type, fromWorldItem) {
-    const rec = FOOD[type];
+    let rec = FOOD[type];
+    
+    // If not in base FOOD, check discovered items
+    if (!rec && state.notebook) {
+      const { getFoodValue } = require('./discovery.js');
+      const foodVal = getFoodValue(type, state.notebook);
+      if (foodVal) {
+        rec = foodVal;
+      }
+    }
+    
+    if (!rec) {
+      // Fallback
+      rec = { hunger: 0.1, time: 0.5, energy: 0.02 };
+    }
+    
     state.busy = { kind: 'eat', t: 0, dur: rec.time, type, fromWorldItem };
   }
 
@@ -368,13 +448,27 @@ export function createAgent(world, assets, priors = null) {
   function startForage(source) {
     state.busy = { kind: 'forage', t: 0, dur: 1.2, source, hasTools: state.hasTools };
   }
+  
+  function startCombine(item1, item2) {
+    state.busy = { kind: 'combine', t: 0, dur: 1.8, item1, item2 };
+  }
 
   function finishBusy() {
     const b = state.busy;
     state.busy = null;
     if (!b) return;
     if (b.kind === 'eat') {
-      const rec = FOOD[b.type];
+      let rec = FOOD[b.type];
+      
+      // Check discovered food
+      if (!rec && state.notebook) {
+        const { getFoodValue } = require('./discovery.js');
+        const foodVal = getFoodValue(b.type, state.notebook);
+        if (foodVal) rec = foodVal;
+      }
+      
+      if (!rec) rec = { hunger: 0.1, energy: 0.02 };
+      
       state.hunger = Math.min(1, state.hunger + rec.hunger);
       state.energy = Math.min(1, state.energy + rec.energy);
       if (b.fromWorldItem && world.pickups.includes(b.fromWorldItem)) {
@@ -418,6 +512,37 @@ export function createAgent(world, assets, priors = null) {
       if (harvested) {
         playGather();
         brain.reinforce(0.6);
+      }
+    } else if (b.kind === 'combine') {
+      // Check if we still have both items
+      if ((state.inventory[b.item1] || 0) > 0 && (state.inventory[b.item2] || 0) > 0) {
+        if (state.notebook) {
+          const result = state.notebook.combine(b.item1, b.item2);
+          
+          // Consume inputs
+          state.inventory[b.item1] -= 1;
+          state.inventory[b.item2] -= 1;
+          
+          // Add output
+          const outputId = result.output;
+          state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
+          
+          // Reward: base craft reward + curiosity bonus for first discovery
+          let reward = 0.7;
+          if (result.discovered) {
+            reward += 0.4; // Curiosity bonus for new discovery
+          }
+          
+          brain.reinforce(reward);
+          
+          // Update best gather mult if this item is better
+          updateBestGatherMult();
+          
+          // Check if tools were created
+          if (outputId === 'tools' || (result.recipe.isEquippable && result.recipe.gatherMult >= 2.0)) {
+            state.hasTools = true;
+          }
+        }
       }
     }
   }
@@ -668,6 +793,19 @@ export function createAgent(world, assets, priors = null) {
       return false;
     }
 
+    if (actName === 'combine') {
+      if (!canCombineAny()) {
+        brain.reinforce(-0.03);
+        return false;
+      }
+      
+      const items = pickTwoCombineItems();
+      if (items) {
+        startCombine(items[0], items[1]);
+      }
+      return false;
+    }
+
     return false;
   }
 
@@ -686,11 +824,11 @@ export function createAgent(world, assets, priors = null) {
             ? 'Crafting'
             : state.busy?.kind === 'build'
               ? 'Building'
-              : state.busy?.kind === 'forage'
-                ? (state.hunger > HUNGER_FOOD_THRESHOLD && ['berry', 'grain', 'fish'].includes(state.busy.source?.harvestType) 
-                    ? 'Gathering' 
-                    : 'Gathering')
-                : ACTION_LABELS[state.action] || 'Idle';
+              : state.busy?.kind === 'combine'
+                ? 'Inventing'
+                : state.busy?.kind === 'forage'
+                  ? 'Gathering'
+                  : ACTION_LABELS[state.action] || 'Idle';
       hud.action.textContent = busyBit;
     }
     if (hud.inv) {

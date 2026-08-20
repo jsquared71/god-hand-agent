@@ -11,6 +11,7 @@ export const ACTION_NAMES = [
   'seek_material',
   'process',
   'build',
+  'combine',
 ];
 
 export const ACTION_LABELS = {
@@ -20,12 +21,13 @@ export const ACTION_LABELS = {
   seek_material: 'Gathering',
   process: 'Crafting',
   build: 'Building',
+  combine: 'Inventing',
   'idle-hungry': 'Starving',
 };
 
-export const INPUT_SIZE = 20;
+export const INPUT_SIZE = 22;
 export const HIDDEN_SIZE = 16;
-export const OUTPUT_SIZE = 6;
+export const OUTPUT_SIZE = 7;
 
 function zeros(n) {
   return new Float64Array(n);
@@ -93,11 +95,12 @@ export class Brain {
     } else {
       // Default priors so the first minutes aren't pure noise.
       this.b2[0] = 0.15; // idle
-      this.b2[1] = 0.15; // seek_food (lowered from 0.35 to reduce eager eating)
-      this.b2[2] = 0.05; // eat (lowered from 0.1)
-      this.b2[3] = 0.35; // seek_material (raised to prioritize gathering)
-      this.b2[4] = 0.08; // process (raised slightly)
+      this.b2[1] = 0.1; // seek_food (further reduced - let hunger drive this)
+      this.b2[2] = 0.05; // eat
+      this.b2[3] = 0.35; // seek_material (prioritize gathering)
+      this.b2[4] = 0.08; // process
       this.b2[5] = -0.05; // build
+      this.b2[6] = 0.12; // combine (encourage experimentation)
     }
     
     this.last = null;
@@ -182,7 +185,7 @@ export class Brain {
 }
 
 /**
- * Pack world/agent snapshot into the 20-D observation vector.
+ * Pack world/agent snapshot into the 22-D observation vector.
  * Distances are mapped through 1/(1+d) so nearer = larger.
  */
 export function encodeInputs({
@@ -204,6 +207,9 @@ export function encodeInputs({
   distForageWood = Infinity,
   distForageOre = Infinity,
   distForageStone = Infinity,
+  hasSharp = false,
+  hasMetal = false,
+  hasVehicle = false,
 }) {
   const inv = (k) => Math.min(1, (inventory[k] || 0) / 4);
   const nd = (d) => (d == null || d === Infinity ? 0 : 1 / (1 + d));
@@ -234,5 +240,7 @@ export function encodeInputs({
     hasHut ? 1 : 0,
     hasWorkbench ? 1 : 0,
     (hasTools ? 1 : 0) * 0.7 + (starving ? 0.3 : 0),
+    hasSharp ? 1 : 0,
+    hasMetal ? 1 : 0,
   ];
 }

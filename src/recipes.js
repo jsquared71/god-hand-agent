@@ -153,54 +153,93 @@ function formatCost(costObj) {
     .join(' + ');
 }
 
-export function setupRecipeHud() {
+export function setupRecipeHud(notebook = null) {
   const recipesList = document.getElementById('recipes-list');
   if (!recipesList) return;
 
   let html = '';
-
-  html += '<div class="recipe-section">';
-  html += '<div class="recipe-section-title">Process</div>';
   
-  Object.entries(PROCESS).forEach(([input, recipe]) => {
-    const outputLabel = LABELS[recipe.out] || recipe.out;
+  if (notebook) {
+    // Show discovered recipes only
+    html += '<div class="recipe-section">';
+    html += '<div class="recipe-section-title">Discovered Recipes</div>';
     
-    html += '<div class="recipe-item">';
-    html += `<span class="recipe-output">${outputLabel}</span>`;
-    html += '<span class="recipe-cost">';
-    
-    if (recipe.inputs) {
-      const parts = Object.entries(recipe.inputs).map(([material, count]) => {
-        const label = LABELS[material] || material;
-        const color = COLORS[material] || '#888';
-        return `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${color}"></span>${count} ${label.toLowerCase()}</span>`;
-      });
-      html += parts.join(' + ');
+    const discovered = notebook.getDiscovered();
+    if (discovered.length === 0) {
+      html += '<div class="recipe-item"><span class="recipe-output" style="font-style: italic; color: #888;">Combine items to discover recipes...</span></div>';
     } else {
-      const inputLabel = LABELS[input] || input;
-      const inputColor = COLORS[input] || '#888';
-      html += `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${inputColor}"></span>1 ${inputLabel.toLowerCase()}</span>`;
+      discovered.forEach((recipe) => {
+        if (recipe.isBuilding) return; // Skip buildings for now
+        
+        const outputLabel = recipe.label || recipe.output;
+        const outputColor = recipe.color || '#888';
+        
+        html += '<div class="recipe-item">';
+        html += `<span class="recipe-output"><span class="recipe-cost-dot" style="background:${outputColor}"></span>${outputLabel}</span>`;
+        html += '<span class="recipe-cost">';
+        
+        const parts = recipe.inputs.map((input) => {
+          const inputLabel = LABELS[input] || input;
+          const inputColor = COLORS[input] || '#888';
+          return `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${inputColor}"></span>${inputLabel.toLowerCase()}</span>`;
+        });
+        html += parts.join(' + ');
+        
+        html += '</span>';
+        html += '</div>';
+      });
     }
     
-    html += '</span>';
     html += '</div>';
-  });
-
-  html += '</div>';
-
-  html += '<div class="recipe-section">';
-  html += '<div class="recipe-section-title">Build</div>';
-  
-  Object.entries(BUILD).forEach(([buildType, recipe]) => {
-    const label = LABELS[buildType] || buildType;
+  } else {
+    // Fallback: show legacy recipes
+    html += '<div class="recipe-section">';
+    html += '<div class="recipe-section-title">Process</div>';
     
-    html += '<div class="recipe-item">';
-    html += `<span class="recipe-output">${label}</span>`;
-    html += `<span class="recipe-cost">${formatCost(recipe.cost)}</span>`;
-    html += '</div>';
-  });
+    Object.entries(PROCESS).forEach(([input, recipe]) => {
+      const outputLabel = LABELS[recipe.out] || recipe.out;
+      
+      html += '<div class="recipe-item">';
+      html += `<span class="recipe-output">${outputLabel}</span>`;
+      html += '<span class="recipe-cost">';
+      
+      if (recipe.inputs) {
+        const parts = Object.entries(recipe.inputs).map(([material, count]) => {
+          const label = LABELS[material] || material;
+          const color = COLORS[material] || '#888';
+          return `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${color}"></span>${count} ${label.toLowerCase()}</span>`;
+        });
+        html += parts.join(' + ');
+      } else {
+        const inputLabel = LABELS[input] || input;
+        const inputColor = COLORS[input] || '#888';
+        html += `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${inputColor}"></span>1 ${inputLabel.toLowerCase()}</span>`;
+      }
+      
+      html += '</span>';
+      html += '</div>';
+    });
 
-  html += '</div>';
+    html += '</div>';
+
+    html += '<div class="recipe-section">';
+    html += '<div class="recipe-section-title">Build</div>';
+    
+    Object.entries(BUILD).forEach(([buildType, recipe]) => {
+      const label = LABELS[buildType] || buildType;
+      
+      html += '<div class="recipe-item">';
+      html += `<span class="recipe-output">${label}</span>`;
+      html += `<span class="recipe-cost">${formatCost(recipe.cost)}</span>`;
+      html += '</div>';
+    });
+
+    html += '</div>';
+  }
 
   recipesList.innerHTML = html;
+}
+
+export function updateRecipeHud(notebook) {
+  setupRecipeHud(notebook);
 }

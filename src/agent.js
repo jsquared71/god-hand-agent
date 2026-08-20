@@ -63,18 +63,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   };
 
   const hud = {
-    hungerFill: document.getElementById('hunger-fill'),
-    hungerVal: document.getElementById('hunger-val'),
-    energyFill: document.getElementById('energy-fill'),
-    energyVal: document.getElementById('energy-val'),
-    action: document.getElementById('brain-action'),
-    inv: document.getElementById('inventory'),
-    campStatus: {
-      fed: document.getElementById('camp-fed'),
-      housed: document.getElementById('camp-housed'),
-      tooled: document.getElementById('camp-tooled'),
-      stocked: document.getElementById('camp-stocked'),
-    },
+    hungerFill: document.getElementById(`${name.toLowerCase()}-hunger-fill`),
+    hungerVal: document.getElementById(`${name.toLowerCase()}-hunger-val`),
+    energyFill: document.getElementById(`${name.toLowerCase()}-energy-fill`),
+    energyVal: document.getElementById(`${name.toLowerCase()}-energy-val`),
+    action: document.getElementById(`${name.toLowerCase()}-mind`),
+    inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
 
   function hutNear() {
@@ -961,7 +955,35 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
     if (hud.energyVal) hud.energyVal.textContent = `${e}%`;
-    // Brain action is now updated centrally in main.js to show all agents
+    
+    // Update this agent's mind status
+    if (hud.action) {
+      const busy = state.busy?.kind === 'eat'
+        ? 'Eating'
+        : state.busy?.kind === 'process'
+          ? 'Crafting'
+          : state.busy?.kind === 'build'
+            ? 'Building'
+            : state.busy?.kind === 'combine'
+              ? 'Inventing'
+              : state.busy?.kind === 'forage'
+                ? 'Gathering'
+                : state.action === 'seek_food'
+                  ? 'Seeking food'
+                  : state.action === 'seek_material'
+                    ? 'Gathering'
+                    : state.action === 'idle-hungry'
+                      ? 'Starving'
+                      : state.action === 'process'
+                        ? 'Crafting'
+                        : state.action === 'build'
+                          ? 'Building'
+                          : state.action === 'combine'
+                            ? 'Inventing'
+                            : 'Idle';
+      hud.action.textContent = busy;
+    }
+    
     if (hud.inv) {
       const bits = ALL_ITEM_TYPES.map((t) => {
         const n = state.inventory[t] || 0;

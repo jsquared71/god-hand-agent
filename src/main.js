@@ -229,41 +229,6 @@ startAutosave(world, agents, world.camera, gameState, notebook);
 let last = performance.now();
 let frameErrorLogged = false;
 
-function updateMindStatus() {
-  const brainAction = document.getElementById('brain-action');
-  if (!brainAction) return;
-  
-  const statuses = agents.map(agent => {
-    const state = agent.state;
-    const busy = state.busy?.kind === 'eat'
-      ? 'Eating'
-      : state.busy?.kind === 'process'
-        ? 'Crafting'
-        : state.busy?.kind === 'build'
-          ? 'Building'
-          : state.busy?.kind === 'combine'
-            ? 'Inventing'
-            : state.busy?.kind === 'forage'
-              ? 'Gathering'
-              : state.action === 'seek_food'
-                ? 'Seeking food'
-                : state.action === 'seek_material'
-                  ? 'Gathering'
-                  : state.action === 'idle-hungry'
-                    ? 'Starving'
-                    : state.action === 'process'
-                      ? 'Crafting'
-                      : state.action === 'build'
-                        ? 'Building'
-                        : state.action === 'combine'
-                          ? 'Inventing'
-                          : 'Idle';
-    return `${state.name} ${busy}`;
-  });
-  
-  brainAction.textContent = statuses.join(' · ');
-}
-
 function updateFavor(dt) {
   // Base regen
   let regen = gameState.favorRegenRate * dt;
@@ -335,9 +300,6 @@ function frame(now) {
     if (Math.random() < 0.016) {
       updateRecipeHud(notebook);
     }
-    
-    // Update combined Mind status for all agents
-    updateMindStatus();
     
     world.render();
   } catch (error) {

@@ -293,8 +293,8 @@ export function updateWorldItems(world, dt) {
         creature.mesh.position.x = nextX;
         creature.mesh.position.z = nextZ;
         // Orient mesh to face movement direction
-        // Models are built with head at +X, so yaw = atan2(dx, dz)
-        creature.mesh.rotation.y = Math.atan2(dx, dz);
+        // Models are built with head at +X, so we need to offset by -π/2
+        creature.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
       } else {
         creature.dir += Math.PI;
       }

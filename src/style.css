@@ -55,7 +55,7 @@ body::after {
   top: 18px;
   left: 18px;
   z-index: 5;
-  width: min(360px, calc(100vw - 36px));
+  width: min(400px, calc(100vw - 36px));
   padding: 16px 18px 14px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -135,6 +135,45 @@ body::after {
   color: var(--ink);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.settler-card {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+.settler-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.settler-card .bar-row {
+  margin-bottom: 6px;
+}
+
+.settler-card .bar-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.settler-card .hud-action {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.settler-card .hud-inv {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.settler-card .hud-inv .inv-chip.empty {
+  display: none;
 }
 
 .hud-action {

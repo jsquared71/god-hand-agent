@@ -272,9 +272,103 @@ function createBiomes(scene, seed = Date.now()) {
     forageSources.push({
       mesh: cluster,
       type: 'mushroom',
-      harvestType: 'berry', // Mushrooms yield berry equivalent
+      harvestType: 'mushroom',
       cooldown: 0,
       cooldownMax: 40.0, // 40s per charge regeneration
+      charges: 2,
+      chargesMax: 2,
+    });
+  }
+  
+  // Forest fruit bushes (harvestable food) - apples/berries on trees
+  const fruitMat = new THREE.MeshStandardMaterial({
+    color: '#e85a4a',
+    roughness: 0.5,
+    emissive: '#4a1a10',
+    emissiveIntensity: 0.12,
+  });
+  const fruitBushMat = new THREE.MeshStandardMaterial({
+    color: '#5a7a4a',
+    roughness: 0.8,
+  });
+  const fruitCount = rng.int(3, 6);
+  for (let i = 0; i < fruitCount; i++) {
+    const x = rng.range(-13, -7);
+    const z = rng.range(-5, 5);
+    const bush = new THREE.Group();
+    bush.position.set(x, 0, z);
+    
+    // Green foliage
+    const foliage = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4, 8, 6),
+      fruitBushMat
+    );
+    foliage.position.y = 0.3;
+    foliage.scale.set(1, 0.8, 1);
+    foliage.castShadow = true;
+    bush.add(foliage);
+    
+    // Red/orange fruits
+    for (let j = 0; j < 6; j++) {
+      const angle = (j / 6) * Math.PI * 2 + rng.next() * 0.5;
+      const radius = 0.2 + rng.next() * 0.15;
+      const fruit = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 6, 5),
+        fruitMat
+      );
+      fruit.position.set(
+        Math.cos(angle) * radius,
+        0.35 + rng.next() * 0.15,
+        Math.sin(angle) * radius
+      );
+      fruit.castShadow = true;
+      bush.add(fruit);
+    }
+    
+    scene.add(bush);
+    forageSources.push({
+      mesh: bush,
+      type: 'fruit_bush',
+      harvestType: 'fruit',
+      cooldown: 0,
+      cooldownMax: 35.0,
+      charges: 2,
+      chargesMax: 2,
+    });
+  }
+  
+  // Meadow herbs (harvestable food) - small green plants
+  const herbMat = new THREE.MeshStandardMaterial({
+    color: '#6a8a4a',
+    roughness: 0.85,
+  });
+  const herbCount = rng.int(4, 7);
+  for (let i = 0; i < herbCount; i++) {
+    const x = rng.range(4, 12);
+    const z = rng.range(-5, 5);
+    const herbPatch = new THREE.Group();
+    herbPatch.position.set(x, 0, z);
+    
+    for (let j = 0; j < 5; j++) {
+      const offsetX = (rng.next() - 0.5) * 0.4;
+      const offsetZ = (rng.next() - 0.5) * 0.4;
+      const leaf = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, 0.25, 4),
+        herbMat
+      );
+      leaf.position.set(offsetX, 0.125, offsetZ);
+      leaf.rotation.y = rng.next() * Math.PI * 2;
+      leaf.castShadow = true;
+      herbPatch.add(leaf);
+    }
+    
+    scene.add(herbPatch);
+    forageSources.push({
+      mesh: herbPatch,
+      type: 'herb_patch',
+      harvestType: 'herb',
+      cooldown: 0,
+      cooldownMax: 30.0,
       charges: 2,
       chargesMax: 2,
     });
@@ -303,11 +397,15 @@ function createBiomes(scene, seed = Date.now()) {
     scene.add(rabbit);
     fauna.push({
       mesh: rabbit,
+      species: 'rabbit',
       biome: 'meadow',
       bounds: { minX: 3, maxX: 13, minZ: -6, maxZ: 6 },
       speed: 0.4,
       dir: rng.next() * Math.PI * 2,
       hopPhase: rng.next() * Math.PI * 2,
+      domestic: false,
+      productionTimer: 0,
+      productionInterval: 60.0, // 60s to produce egg/meat
     });
   }
   
@@ -411,11 +509,15 @@ function createBiomes(scene, seed = Date.now()) {
     scene.add(deer);
     fauna.push({
       mesh: deer,
+      species: 'deer',
       biome: 'forest',
       bounds: { minX: -14, maxX: -6, minZ: -6, maxZ: 6 },
       speed: 0.5,
       dir: rng.next() * Math.PI * 2,
       hopPhase: 0,
+      domestic: false,
+      productionTimer: 0,
+      productionInterval: 80.0, // 80s to produce milk
     });
   }
   

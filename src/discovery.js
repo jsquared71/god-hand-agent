@@ -27,67 +27,84 @@ export const TAGS = {
 /** Base item definitions with their tags and properties */
 export const BASE_ITEMS = {
   // Raw materials
-  berry: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.22, time: 2.8, color: '#c41e5a', label: 'Berry' },
-  grain: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.38, time: 3.8, color: '#e8b923', label: 'Grain' },
-  wood: { tags: [TAGS.FUEL, TAGS.STRUCTURAL, TAGS.RAW], color: '#6b3f1d', label: 'Wood' },
-  stone: { tags: [TAGS.SHARP, TAGS.STRUCTURAL, TAGS.RAW], color: '#8a8f99', label: 'Stone' },
-  ore: { tags: [TAGS.METAL, TAGS.RAW], color: '#5a3228', label: 'Ore' },
-  water: { tags: [TAGS.LIQUID, TAGS.FOOD], hunger: 0.12, time: 2.0, color: '#4a9fc8', label: 'Water' },
-  fish: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.25, time: 3.2, color: '#78a8c4', label: 'Fish' },
+  berry: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.22, time: 2.8, color: '#c41e5a', label: 'Berry', bases: ['berry'] },
+  grain: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.38, time: 3.8, color: '#e8b923', label: 'Grain', bases: ['grain'] },
+  wood: { tags: [TAGS.FUEL, TAGS.STRUCTURAL, TAGS.RAW], color: '#6b3f1d', label: 'Wood', bases: ['wood'] },
+  stone: { tags: [TAGS.SHARP, TAGS.STRUCTURAL, TAGS.RAW], color: '#8a8f99', label: 'Stone', bases: ['stone'] },
+  ore: { tags: [TAGS.METAL, TAGS.RAW], color: '#5a3228', label: 'Ore', bases: ['ore'] },
+  water: { tags: [TAGS.LIQUID, TAGS.FOOD], hunger: 0.12, time: 2.0, color: '#4a9fc8', label: 'Water', bases: ['water'] },
+  fish: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.25, time: 3.2, color: '#78a8c4', label: 'Fish', bases: ['fish'] },
+  mushroom: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.2, time: 2.5, color: '#d4745a', label: 'Mushroom', bases: ['mushroom'] },
+  fruit: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.24, time: 2.9, color: '#e85a4a', label: 'Fruit', bases: ['fruit'] },
+  herb: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.15, time: 2.2, color: '#6a8a4a', label: 'Herb', bases: ['herb'] },
+  meat: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.35, time: 4.0, color: '#a84a3a', label: 'Meat', bases: ['meat'] },
+  egg: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.28, time: 3.0, color: '#f0e8c0', label: 'Egg', bases: ['egg'] },
+  milk: { tags: [TAGS.FOOD, TAGS.LIQUID], hunger: 0.22, time: 2.5, color: '#f8f4e0', label: 'Milk', bases: ['milk'] },
   
   // Processed basics
-  planks: { tags: [TAGS.STRUCTURAL, TAGS.PROCESSED], color: '#d4a574', label: 'Planks' },
-  ingot: { tags: [TAGS.METAL, TAGS.PROCESSED], color: '#7b8792', label: 'Ingot' },
-  sticks: { tags: [TAGS.STRUCTURAL, TAGS.SHARP, TAGS.PROCESSED], color: '#8b6239', label: 'Sticks' },
+  planks: { tags: [TAGS.STRUCTURAL, TAGS.PROCESSED], color: '#d4a574', label: 'Planks', bases: ['wood'] },
+  ingot: { tags: [TAGS.METAL, TAGS.PROCESSED], color: '#7b8792', label: 'Ingot', bases: ['ore'] },
+  sticks: { tags: [TAGS.STRUCTURAL, TAGS.SHARP, TAGS.PROCESSED], color: '#8b6239', label: 'Sticks', bases: ['wood'] },
   
   // Cooked food
-  bread: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, time: 5.0, color: '#c4843c', label: 'Bread' },
-  stew: { tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, time: 6.0, color: '#d46c3a', label: 'Stew' },
-  cooked_fish: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, time: 5.2, color: '#c89870', label: 'Cooked Fish' },
+  bread: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, time: 5.0, color: '#c4843c', label: 'Bread', bases: ['grain', 'water'] },
+  stew: { tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, time: 6.0, color: '#d46c3a', label: 'Stew', bases: ['berry', 'water'] },
+  cooked_fish: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, time: 5.2, color: '#c89870', label: 'Cooked Fish', bases: ['fish'] },
   
   // Buildings (not combinable, but in the system)
-  workbench: { tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, color: '#5c4033', label: 'Workbench' },
-  hut: { tags: [TAGS.STRUCTURAL], isBuilding: true, color: '#8b5a2b', label: 'Hut' },
-  fire: { tags: [TAGS.LIGHT, TAGS.FUEL], isBuilding: true, color: '#e84c22', label: 'Campfire' },
-  well: { tags: [TAGS.STRUCTURAL, TAGS.VESSEL], isBuilding: true, color: '#6a7a8a', label: 'Well' },
-  chest: { tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, color: '#7a5a3a', label: 'Chest' },
+  workbench: { tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, color: '#5c4033', label: 'Workbench', bases: ['wood', 'stone'] },
+  hut: { tags: [TAGS.STRUCTURAL], isBuilding: true, color: '#8b5a2b', label: 'Hut', bases: ['wood', 'stone'] },
+  fire: { tags: [TAGS.LIGHT, TAGS.FUEL], isBuilding: true, color: '#e84c22', label: 'Campfire', bases: ['wood', 'stone'] },
+  well: { tags: [TAGS.STRUCTURAL, TAGS.VESSEL], isBuilding: true, color: '#6a7a8a', label: 'Well', bases: ['stone', 'wood'] },
+  chest: { tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, color: '#7a5a3a', label: 'Chest', bases: ['wood'] },
   
   // Special items
-  tools: { tags: [TAGS.METAL, TAGS.SHARP], gatherMult: 2.0, processSpeedMult: 0.62, isEquippable: true, color: '#6e7b85', label: 'Tools' },
+  tools: { tags: [TAGS.METAL, TAGS.SHARP, TAGS.WEAPON], gatherMult: 2.0, processSpeedMult: 0.62, isEquippable: true, color: '#6e7b85', label: 'Tools', bases: ['ore'] },
 };
 
 /** Seed discovery rules: obvious combinations that work from the start */
 const SEED_DISCOVERIES = [
   // Basic processing
-  { inputs: ['wood', 'stone'], output: 'crude_tool', tags: [TAGS.SHARP, TAGS.STRUCTURAL], gatherMult: 1.5, label: 'Crude Tool' },
-  { inputs: ['wood', 'wood'], output: 'sticks', tags: [TAGS.STRUCTURAL, TAGS.SHARP, TAGS.PROCESSED], label: 'Sticks' },
-  { inputs: ['planks', 'planks'], output: 'chest', tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, label: 'Chest' },
+  { inputs: ['wood', 'stone'], output: 'crude_tool', tags: [TAGS.SHARP, TAGS.STRUCTURAL], gatherMult: 1.5, label: 'Crude Tool', bases: ['wood', 'stone'] },
+  { inputs: ['wood', 'wood'], output: 'sticks', tags: [TAGS.STRUCTURAL, TAGS.SHARP, TAGS.PROCESSED], label: 'Sticks', bases: ['wood'] },
+  { inputs: ['planks', 'planks'], output: 'chest', tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, label: 'Chest', bases: ['wood'] },
   
   // Smelting
-  { inputs: ['ore', 'fire'], output: 'ingot', tags: [TAGS.METAL, TAGS.PROCESSED], label: 'Ingot' },
+  { inputs: ['ore', 'fire'], output: 'ingot', tags: [TAGS.METAL, TAGS.PROCESSED], label: 'Ingot', bases: ['ore'] },
   
-  // Tools
-  { inputs: ['ingot', 'wood'], output: 'metal_tool', tags: [TAGS.METAL, TAGS.SHARP], gatherMult: 2.5, damage: 3, label: 'Metal Tool' },
-  { inputs: ['metal', 'wood'], output: 'axe', tags: [TAGS.WEAPON, TAGS.SHARP, TAGS.METAL], damage: 5, gatherMult: 2.0, label: 'Axe' },
-  { inputs: ['ingot', 'ingot'], output: 'tools', tags: [TAGS.METAL, TAGS.SHARP], gatherMult: 2.0, processSpeedMult: 0.62, isEquippable: true, label: 'Tools' },
+  // Tools & Weapons
+  { inputs: ['ingot', 'wood'], output: 'metal_tool', tags: [TAGS.METAL, TAGS.SHARP, TAGS.WEAPON], gatherMult: 2.5, damage: 3, label: 'Metal Tool', bases: ['ore', 'wood'] },
+  { inputs: ['metal', 'wood'], output: 'axe', tags: [TAGS.WEAPON, TAGS.SHARP, TAGS.METAL], damage: 5, gatherMult: 2.0, label: 'Axe', bases: ['ore', 'wood'] },
+  { inputs: ['ingot', 'ingot'], output: 'tools', tags: [TAGS.METAL, TAGS.SHARP, TAGS.WEAPON], gatherMult: 2.0, processSpeedMult: 0.62, isEquippable: true, label: 'Tools', bases: ['ore'] },
+  { inputs: ['sharp', 'structural'], output: 'spear', tags: [TAGS.WEAPON, TAGS.SHARP], damage: 4, label: 'Spear', bases: ['wood', 'stone'] },
+  { inputs: ['metal', 'sharp'], output: 'blade', tags: [TAGS.WEAPON, TAGS.SHARP, TAGS.METAL], damage: 6, label: 'Blade', bases: ['ore', 'wood'] },
   
   // Cooking
-  { inputs: ['grain', 'water'], output: 'bread', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, label: 'Bread' },
-  { inputs: ['berry', 'water'], output: 'stew', tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, label: 'Stew' },
-  { inputs: ['fish', 'fire'], output: 'cooked_fish', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, label: 'Cooked Fish' },
+  { inputs: ['grain', 'water'], output: 'bread', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, time: 5.0, label: 'Bread', bases: ['grain', 'water'] },
+  { inputs: ['berry', 'water'], output: 'stew', tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, time: 6.0, label: 'Stew', bases: ['berry', 'water'] },
+  { inputs: ['fish', 'fire'], output: 'cooked_fish', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, time: 5.2, label: 'Cooked Fish', bases: ['fish'] },
+  { inputs: ['grain', 'berry'], output: 'mash', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.55, time: 3.5, label: 'Berry Grain', bases: ['grain', 'berry'] },
+  { inputs: ['bread', 'berry'], output: 'berry_bread', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.85, time: 5.2, label: 'Berry Bread', bases: ['grain', 'water', 'berry'] },
+  { inputs: ['fish', 'berry'], output: 'fish_berry', tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.52, time: 4.0, label: 'Fish with Berries', bases: ['fish', 'berry'] },
   
   // Structures
-  { inputs: ['structural', 'structural'], output: 'frame', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Frame' },
-  { inputs: ['planks', 'stone'], output: 'workbench', tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, label: 'Workbench' },
-  { inputs: ['structural', 'mobile'], output: 'cart', tags: [TAGS.VEHICLE, TAGS.STRUCTURAL, TAGS.MOBILE], speedBoost: 1.5, capacity: 2, label: 'Cart' },
+  { inputs: ['structural', 'structural'], output: 'frame', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Frame', bases: ['wood'] },
+  { inputs: ['planks', 'stone'], output: 'workbench', tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, label: 'Workbench', bases: ['wood', 'stone'] },
+  { inputs: ['structural', 'mobile'], output: 'cart', tags: [TAGS.VEHICLE, TAGS.STRUCTURAL, TAGS.MOBILE], speedBoost: 1.5, capacity: 2, label: 'Cart', bases: ['wood'] },
+  
+  // Furniture
+  { inputs: ['planks', 'sticks'], output: 'chair', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Chair', bases: ['wood'] },
+  { inputs: ['planks', 'planks'], output: 'table', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Table', bases: ['wood'] },
+  { inputs: ['planks', 'grain'], output: 'bed', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Bed', bases: ['wood', 'grain'] },
+  
+  // Animal care
+  { inputs: ['planks', 'grain'], output: 'trough', tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, label: 'Trough', bases: ['wood', 'grain'] },
+  { inputs: ['planks', 'sticks'], output: 'pen', tags: [TAGS.STRUCTURAL], isBuilding: true, label: 'Pen', bases: ['wood'] },
+  { inputs: ['grain', 'water'], output: 'feed', tags: [TAGS.FOOD], hunger: 0.0, label: 'Animal Feed', bases: ['grain', 'water'] },
   
   // Vehicles
-  { inputs: ['structural', 'wheel'], output: 'wagon', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 2.0, capacity: 4, label: 'Wagon' },
-  { inputs: ['wood', 'wheel'], output: 'cart', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 1.5, capacity: 2, label: 'Cart' },
-  
-  // Weapons
-  { inputs: ['sharp', 'structural'], output: 'spear', tags: [TAGS.WEAPON, TAGS.SHARP], damage: 4, label: 'Spear' },
-  { inputs: ['metal', 'sharp'], output: 'blade', tags: [TAGS.WEAPON, TAGS.SHARP, TAGS.METAL], damage: 6, label: 'Blade' },
+  { inputs: ['structural', 'wheel'], output: 'wagon', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 2.0, capacity: 4, label: 'Wagon', bases: ['wood'] },
+  { inputs: ['wood', 'wheel'], output: 'cart', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 1.5, capacity: 2, label: 'Cart', bases: ['wood'] },
 ];
 
 /** Discovery state: recipes found during play */
@@ -141,27 +158,43 @@ export class DiscoveryNotebook {
     // Blend tags (union)
     const tags = [...new Set([...info1.tags, ...info2.tags])];
     
-    // Check if both inputs are FOOD and neither is water or fire (cooking liquids)
+    // Compute merged bases
+    const bases1 = info1.bases || [item1];
+    const bases2 = info2.bases || [item2];
+    const mergedBases = [...new Set([...bases1, ...bases2])].sort();
+    
+    // Check if both inputs are FOOD
     const bothFood = info1.tags.includes(TAGS.FOOD) && info2.tags.includes(TAGS.FOOD);
     const hasWater = item1 === 'water' || item2 === 'water';
     const hasFire = item1 === 'fire' || item2 === 'fire';
     
     let output;
     let discovered = true;
+    let label;
     
-    // If both are food and not a cooking recipe, reuse stable leftover
+    // If both are food and not a cooking recipe (no water/fire)
     if (bothFood && !hasWater && !hasFire) {
-      // Check if mash already exists in discovered recipes
-      const existingMash = Array.from(this.recipes.values()).find(r => r.output === 'mash');
-      if (existingMash) {
-        output = 'mash';
-        discovered = false; // Don't mark as newly discovered
+      // Check if a recipe with these exact bases already exists
+      const existingRecipe = Array.from(this.recipes.values()).find(r => {
+        if (!r.bases) return false;
+        const rBases = [...r.bases].sort();
+        return rBases.length === mergedBases.length && rBases.every((b, i) => b === mergedBases[i]);
+      });
+      
+      if (existingRecipe) {
+        // Reuse existing recipe with same bases (more of the same)
+        output = existingRecipe.output;
+        discovered = false;
+        label = existingRecipe.label;
       } else {
-        output = 'mash'; // First mash
+        // New unique food mix: generate a proper name
+        output = `food-${this.nextGeneratedId++}`;
+        label = this._generateFoodLabel(mergedBases, item1, item2);
       }
     } else {
-      // Generate output id for non-food-food combinations
+      // Non-food-food combination
       output = `${item1}-${item2}-${this.nextGeneratedId++}`;
+      label = this._generateLabel(tags, item1, item2, output);
     }
     
     // Generate properties based on tags
@@ -169,7 +202,8 @@ export class DiscoveryNotebook {
       output,
       inputs: [item1, item2],
       tags,
-      label: this._generateLabel(tags, item1, item2, output),
+      bases: mergedBases,
+      label: label || this._generateLabel(tags, item1, item2, output),
       color: this._blendColors(info1.color, info2.color),
       discovered,
     };
@@ -200,6 +234,22 @@ export class DiscoveryNotebook {
     }
     
     return props;
+  }
+  
+  _generateFoodLabel(bases, item1, item2) {
+    // Generate readable names for food combinations
+    const baseLabels = bases.map(b => {
+      const info = BASE_ITEMS[b];
+      return info ? info.label : b.charAt(0).toUpperCase() + b.slice(1);
+    });
+    
+    if (baseLabels.length === 2) {
+      return `${baseLabels[0]} ${baseLabels[1]}`;
+    } else if (baseLabels.length === 3) {
+      return `${baseLabels[0]} ${baseLabels[1]} ${baseLabels[2]}`;
+    } else {
+      return baseLabels.join(' ');
+    }
   }
   
   _getItemInfo(itemId) {

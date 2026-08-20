@@ -13,6 +13,7 @@ export function serializeWorld(world, agent, camera) {
   const state = {
     version: SAVE_VERSION,
     timestamp: Date.now(),
+    seed: world.seed || Date.now(),
     agent: {
       position: { x: agent.group.position.x, y: agent.group.position.y, z: agent.group.position.z },
       facing: agent.state.facing,
@@ -34,6 +35,9 @@ export function serializeWorld(world, agent, camera) {
     pickups: world.pickups.map((p) => ({
       type: p.type,
       position: { x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z },
+      isWorldSpawned: p.isWorldSpawned || false,
+      spawnOrigin: p.spawnOrigin || null,
+      respawnDelay: p.respawnDelay || 45.0,
     })),
     buildings: world.buildings.map((b) => ({
       type: b.type,
@@ -46,8 +50,11 @@ export function serializeWorld(world, agent, camera) {
       harvestType: s.harvestType,
       charges: s.charges,
       cooldown: s.cooldown,
+      cooldownMax: s.cooldownMax,
+      chargesMax: s.chargesMax,
       position: { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z },
     })) : [],
+    pendingRespawns: world.pendingRespawns || [],
     camera: {
       position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
       targetX: camera.userData?.targetX ?? 0,
@@ -107,7 +114,15 @@ export function deserializeWorld(state, world, agent, assets, camera) {
       bobOff: Math.random() * Math.PI * 2,
     };
     world.scene.add(mesh);
-    world.pickups.push({ id: mesh.userData.id, type: pData.type, mesh });
+    world.pickups.push({ 
+      id: mesh.userData.id, 
+      type: pData.type, 
+      mesh,
+      isWorldSpawned: pData.isWorldSpawned || false,
+      spawnOrigin: pData.spawnOrigin || null,
+      respawnTimer: 0,
+      respawnDelay: pData.respawnDelay || 45.0,
+    });
   }
 
   // Clear and restore buildings
@@ -142,9 +157,19 @@ export function deserializeWorld(state, world, agent, assets, camera) {
       if (saved && current && saved.type === current.type) {
         current.charges = saved.charges ?? current.chargesMax;
         current.cooldown = saved.cooldown ?? 0;
+        current.cooldownMax = saved.cooldownMax ?? current.cooldownMax;
+        current.chargesMax = saved.chargesMax ?? current.chargesMax;
         // Apply visual feedback if depleted
         if (current.charges === 0 && current.cooldown > 0) {
-          const alpha = 0.4 + 0.3 * (1 - current.cooldown / current.cooldownMax);
+          const alpha = 0.4 + 0.6 * (current.charges / current.chargesMax);
+          current.mesh.traverse((child) => {
+            if (child.material) {
+              child.material.opacity = alpha;
+              child.material.transparent = true;
+            }
+          });
+        } else if (current.charges < current.chargesMax) {
+          const alpha = 0.4 + 0.6 * (current.charges / current.chargesMax);
           current.mesh.traverse((child) => {
             if (child.material) {
               child.material.opacity = alpha;
@@ -162,6 +187,9 @@ export function deserializeWorld(state, world, agent, assets, camera) {
       }
     }
   }
+  
+  // Restore pending respawns
+  world.pendingRespawns = state.pendingRespawns || [];
 
   // Restore camera
   if (state.camera) {

@@ -1,5 +1,26 @@
 import * as THREE from 'three';
 
+// Seeded RNG (simple LCG)
+class SeededRandom {
+  constructor(seed) {
+    this.seed = seed % 2147483647;
+    if (this.seed <= 0) this.seed += 2147483646;
+  }
+  
+  next() {
+    this.seed = (this.seed * 16807) % 2147483647;
+    return (this.seed - 1) / 2147483646;
+  }
+  
+  range(min, max) {
+    return min + this.next() * (max - min);
+  }
+  
+  int(min, max) {
+    return Math.floor(this.range(min, max + 1));
+  }
+}
+
 function makeSky() {
   const geo = new THREE.SphereGeometry(180, 24, 16);
   const mat = new THREE.ShaderMaterial({
@@ -73,7 +94,8 @@ function makeGroundTexture() {
   return tex;
 }
 
-function createBiomes(scene) {
+function createBiomes(scene, seed = Date.now()) {
+  const rng = new SeededRandom(seed);
   const fauna = [];
   const forageSources = [];
   
@@ -83,15 +105,16 @@ function createBiomes(scene) {
     roughness: 0.95,
     metalness: 0,
   });
-  for (let i = 0; i < 25; i++) {
-    const x = 3 + Math.random() * 10;
-    const z = -6 + Math.random() * 12;
+  const meadowCount = rng.int(20, 30);
+  for (let i = 0; i < meadowCount; i++) {
+    const x = rng.range(3, 13);
+    const z = rng.range(-6, 6);
     const grass = new THREE.Mesh(
       new THREE.ConeGeometry(0.08, 0.35, 4),
       meadowMat
     );
     grass.position.set(x, 0.175, z);
-    grass.rotation.y = Math.random() * Math.PI * 2;
+    grass.rotation.y = rng.next() * Math.PI * 2;
     grass.castShadow = true;
     grass.receiveShadow = true;
     scene.add(grass);
@@ -108,9 +131,10 @@ function createBiomes(scene) {
     emissive: '#3a0010',
     emissiveIntensity: 0.15,
   });
-  for (let i = 0; i < 8; i++) {
-    const x = 5 + Math.random() * 9;
-    const z = -5 + Math.random() * 10;
+  const berryCount = rng.int(6, 10);
+  for (let i = 0; i < berryCount; i++) {
+    const x = rng.range(5, 14);
+    const z = rng.range(-5, 5);
     const bushGroup = new THREE.Group();
     bushGroup.position.set(x, 0, z);
     
@@ -127,15 +151,15 @@ function createBiomes(scene) {
     
     // Clustered red berries on top
     for (let j = 0; j < 8; j++) {
-      const angle = (j / 8) * Math.PI * 2 + Math.random() * 0.3;
-      const radius = 0.15 + Math.random() * 0.15;
+      const angle = (j / 8) * Math.PI * 2 + rng.next() * 0.3;
+      const radius = 0.15 + rng.next() * 0.15;
       const berry = new THREE.Mesh(
         new THREE.SphereGeometry(0.045, 6, 5),
         berryMat
       );
       berry.position.set(
         Math.cos(angle) * radius,
-        0.25 + Math.random() * 0.1,
+        0.25 + rng.next() * 0.1,
         Math.sin(angle) * radius
       );
       berry.castShadow = true;
@@ -148,7 +172,7 @@ function createBiomes(scene) {
       type: 'berry',
       harvestType: 'berry',
       cooldown: 0,
-      cooldownMax: 8.0,
+      cooldownMax: 30.0, // 30s per charge regeneration
       charges: 3,
       chargesMax: 3,
     });
@@ -163,16 +187,17 @@ function createBiomes(scene) {
     color: '#c9a227',
     roughness: 0.9,
   });
-  for (let i = 0; i < 5; i++) {
-    const centerX = 4 + Math.random() * 8;
-    const centerZ = -4 + Math.random() * 8;
+  const grainCount = rng.int(4, 7);
+  for (let i = 0; i < grainCount; i++) {
+    const centerX = rng.range(4, 12);
+    const centerZ = rng.range(-4, 4);
     const patchGroup = new THREE.Group();
     patchGroup.position.set(centerX, 0, centerZ);
     
     // Create a small wheat patch (cluster of stalks)
     for (let j = 0; j < 10; j++) {
-      const offsetX = (Math.random() - 0.5) * 0.8;
-      const offsetZ = (Math.random() - 0.5) * 0.8;
+      const offsetX = (rng.next() - 0.5) * 0.8;
+      const offsetZ = (rng.next() - 0.5) * 0.8;
       const stalk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.025, 0.03, 0.65, 5),
         grainStalkMat
@@ -198,7 +223,7 @@ function createBiomes(scene) {
       type: 'grain',
       harvestType: 'grain',
       cooldown: 0,
-      cooldownMax: 10.0,
+      cooldownMax: 35.0, // 35s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -213,16 +238,17 @@ function createBiomes(scene) {
     color: '#e8d8c4',
     roughness: 0.8,
   });
-  for (let i = 0; i < 4; i++) {
-    const x = 3 + Math.random() * 10;
-    const z = -6 + Math.random() * 12;
+  const mushroomCount = rng.int(3, 6);
+  for (let i = 0; i < mushroomCount; i++) {
+    const x = rng.range(3, 13);
+    const z = rng.range(-6, 6);
     const cluster = new THREE.Group();
     cluster.position.set(x, 0, z);
     
     for (let j = 0; j < 3; j++) {
-      const offsetX = (Math.random() - 0.5) * 0.3;
-      const offsetZ = (Math.random() - 0.5) * 0.3;
-      const size = 0.08 + Math.random() * 0.04;
+      const offsetX = (rng.next() - 0.5) * 0.3;
+      const offsetZ = (rng.next() - 0.5) * 0.3;
+      const size = 0.08 + rng.next() * 0.04;
       
       const stem = new THREE.Mesh(
         new THREE.CylinderGeometry(size * 0.4, size * 0.5, size * 2, 6),
@@ -248,7 +274,7 @@ function createBiomes(scene) {
       type: 'mushroom',
       harvestType: 'berry', // Mushrooms yield berry equivalent
       cooldown: 0,
-      cooldownMax: 12.0,
+      cooldownMax: 40.0, // 40s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -259,9 +285,10 @@ function createBiomes(scene) {
     color: '#c4a890',
     roughness: 0.7,
   });
-  for (let i = 0; i < 3; i++) {
-    const x = 5 + Math.random() * 8;
-    const z = -4 + Math.random() * 8;
+  const rabbitCount = rng.int(2, 4);
+  for (let i = 0; i < rabbitCount; i++) {
+    const x = rng.range(5, 13);
+    const z = rng.range(-4, 4);
     const rabbit = new THREE.Group();
     rabbit.position.set(x, 0, z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.18, 4, 8), rabbitMat);
@@ -279,8 +306,8 @@ function createBiomes(scene) {
       biome: 'meadow',
       bounds: { minX: 3, maxX: 13, minZ: -6, maxZ: 6 },
       speed: 0.4,
-      dir: Math.random() * Math.PI * 2,
-      hopPhase: Math.random() * Math.PI * 2,
+      dir: rng.next() * Math.PI * 2,
+      hopPhase: rng.next() * Math.PI * 2,
     });
   }
   
@@ -293,9 +320,10 @@ function createBiomes(scene) {
     color: '#3a6a3a',
     roughness: 0.8,
   });
-  for (let i = 0; i < 12; i++) {
-    const x = -14 + Math.random() * 8;
-    const z = -6 + Math.random() * 12;
+  const treeCount = rng.int(10, 15);
+  for (let i = 0; i < treeCount; i++) {
+    const x = rng.range(-14, -6);
+    const z = rng.range(-6, 6);
     const tree = new THREE.Group();
     tree.position.set(x, 0, z);
     const trunk = new THREE.Mesh(
@@ -320,7 +348,7 @@ function createBiomes(scene) {
       type: 'tree',
       harvestType: 'wood',
       cooldown: 0,
-      cooldownMax: 12.0,
+      cooldownMax: 35.0, // 35s per charge regeneration
       charges: 3,
       chargesMax: 3,
     });
@@ -331,16 +359,17 @@ function createBiomes(scene) {
     color: '#6b4a2a',
     roughness: 0.95,
   });
-  for (let i = 0; i < 3; i++) {
-    const x = -13 + Math.random() * 6;
-    const z = -4 + Math.random() * 8;
+  const logCount = rng.int(2, 4);
+  for (let i = 0; i < logCount; i++) {
+    const x = rng.range(-13, -7);
+    const z = rng.range(-4, 4);
     const log = new THREE.Mesh(
       new THREE.CylinderGeometry(0.15, 0.18, 1.2, 8),
       logMat
     );
     log.position.set(x, 0.12, z);
     log.rotation.z = Math.PI / 2;
-    log.rotation.y = Math.random() * Math.PI;
+    log.rotation.y = rng.next() * Math.PI;
     log.castShadow = true;
     log.receiveShadow = true;
     scene.add(log);
@@ -349,7 +378,7 @@ function createBiomes(scene) {
       type: 'log',
       harvestType: 'wood',
       cooldown: 0,
-      cooldownMax: 8.0,
+      cooldownMax: 25.0, // 25s per charge regeneration
       charges: 2,
       chargesMax: 2,
     });
@@ -360,9 +389,10 @@ function createBiomes(scene) {
     color: '#8a6a4a',
     roughness: 0.75,
   });
-  for (let i = 0; i < 2; i++) {
-    const x = -12 + Math.random() * 6;
-    const z = -3 + Math.random() * 6;
+  const deerCount = rng.int(1, 3);
+  for (let i = 0; i < deerCount; i++) {
+    const x = rng.range(-12, -6);
+    const z = rng.range(-3, 3);
     const deer = new THREE.Group();
     deer.position.set(x, 0, z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.45, 4, 8), deerMat);
@@ -384,7 +414,7 @@ function createBiomes(scene) {
       biome: 'forest',
       bounds: { minX: -14, maxX: -6, minZ: -6, maxZ: 6 },
       speed: 0.5,
-      dir: Math.random() * Math.PI * 2,
+      dir: rng.next() * Math.PI * 2,
       hopPhase: 0,
     });
   }
@@ -400,17 +430,18 @@ function createBiomes(scene) {
     roughness: 0.95,
     flatShading: true,
   });
-  for (let i = 0; i < 15; i++) {
-    const x = -6 + Math.random() * 12;
-    const z = 7 + Math.random() * 8;
-    const size = 0.3 + Math.random() * 0.6;
-    const isOre = Math.random() < 0.3;
+  const rockCount = rng.int(12, 18);
+  for (let i = 0; i < rockCount; i++) {
+    const x = rng.range(-6, 6);
+    const z = rng.range(7, 15);
+    const size = rng.range(0.3, 0.9);
+    const isOre = rng.next() < 0.3;
     const rock = new THREE.Mesh(
       new THREE.DodecahedronGeometry(size, 0),
       isOre ? oreMat : rockMat
     );
     rock.position.set(x, size * 0.6, z);
-    rock.rotation.set(Math.random(), Math.random(), Math.random());
+    rock.rotation.set(rng.next(), rng.next(), rng.next());
     rock.castShadow = true;
     rock.receiveShadow = true;
     scene.add(rock);
@@ -419,13 +450,15 @@ function createBiomes(scene) {
       type: isOre ? 'ore_rock' : 'stone_rock',
       harvestType: isOre ? 'ore' : 'stone',
       cooldown: 0,
-      cooldownMax: 15.0,
+      cooldownMax: 45.0, // 45s per charge regeneration (slower for minerals)
       charges: 2,
       chargesMax: 2,
     });
   }
   
   // Water biome (north): pond, reeds, fish
+  const pondX = rng.range(-3, -1);
+  const pondZ = rng.range(-12, -10);
   const waterMat = new THREE.MeshStandardMaterial({
     color: '#4a7aa8',
     roughness: 0.15,
@@ -437,7 +470,7 @@ function createBiomes(scene) {
     new THREE.CircleGeometry(5.5, 24),
     waterMat
   );
-  pond.position.set(-2, 0.03, -11);
+  pond.position.set(pondX, 0.03, pondZ);
   pond.rotation.x = -Math.PI / 2;
   pond.receiveShadow = true;
   scene.add(pond);
@@ -449,9 +482,9 @@ function createBiomes(scene) {
   });
   for (let i = 0; i < 12; i++) {
     const angle = (i / 12) * Math.PI * 2;
-    const r = 4.8 + Math.random() * 0.8;
-    const x = -2 + Math.cos(angle) * r;
-    const z = -11 + Math.sin(angle) * r;
+    const r = 4.8 + rng.next() * 0.8;
+    const x = pondX + Math.cos(angle) * r;
+    const z = pondZ + Math.sin(angle) * r;
     const reed = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.03, 0.8, 5),
       reedMat
@@ -472,11 +505,12 @@ function createBiomes(scene) {
     color: '#e89838',
     roughness: 0.6,
   });
-  for (let i = 0; i < 6; i++) {
-    const angle = (i / 6) * Math.PI * 2 + Math.random();
-    const r = 2 + Math.random() * 2.5;
-    const x = -2 + Math.cos(angle) * r;
-    const z = -11 + Math.sin(angle) * r;
+  const fishCount = rng.int(5, 8);
+  for (let i = 0; i < fishCount; i++) {
+    const angle = (i / fishCount) * Math.PI * 2 + rng.next();
+    const r = 2 + rng.next() * 2.5;
+    const x = pondX + Math.cos(angle) * r;
+    const z = pondZ + Math.sin(angle) * r;
     const fish = new THREE.Group();
     fish.position.set(x, 0.12, z);
     
@@ -502,11 +536,11 @@ function createBiomes(scene) {
     const fishFauna = {
       mesh: fish,
       biome: 'water',
-      bounds: { minX: -7, maxX: 3, minZ: -16, maxZ: -6 },
+      bounds: { minX: pondX - 5, maxX: pondX + 5, minZ: pondZ - 5, maxZ: pondZ + 5 },
       speed: 0.6,
-      dir: Math.random() * Math.PI * 2,
+      dir: rng.next() * Math.PI * 2,
       hopPhase: 0,
-      swimPhase: Math.random() * Math.PI * 2,
+      swimPhase: rng.next() * Math.PI * 2,
     };
     fauna.push(fishFauna);
     forageSources.push({
@@ -514,17 +548,41 @@ function createBiomes(scene) {
       type: 'fish',
       harvestType: 'fish',
       cooldown: 0,
-      cooldownMax: 20.0,
+      cooldownMax: 60.0, // 60s per charge regeneration (slowest - fish take time to "respawn")
       charges: 1,
       chargesMax: 1,
       fauna: fishFauna,
     });
   }
   
-  return { fauna, forageSources };
+  // Water gathering points around pond edge
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + Math.PI / 8;
+    const r = 4.2; // Just inside the reeds
+    const x = pondX + Math.cos(angle) * r;
+    const z = pondZ + Math.sin(angle) * r;
+    // Invisible marker for water gathering
+    const waterNode = new THREE.Group();
+    waterNode.position.set(x, 0, z);
+    scene.add(waterNode);
+    forageSources.push({
+      mesh: waterNode,
+      type: 'water_source',
+      harvestType: 'water',
+      cooldown: 0,
+      cooldownMax: 25.0, // 25s per charge regeneration
+      charges: 3,
+      chargesMax: 3,
+    });
+  }
+  
+  return { fauna, forageSources, seed };
 }
 
-export function createWorld(canvas) {
+export function createWorld(canvas, seed = null) {
+  // Generate or use provided seed
+  const worldSeed = seed ?? Date.now();
+  
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
@@ -580,8 +638,8 @@ export function createWorld(canvas) {
   grid.material.opacity = 0.22;
   scene.add(grid);
 
-  // Biome setup - 4 distinct zones
-  const biomes = createBiomes(scene);
+  // Biome setup - 4 distinct zones with seeded randomization
+  const biomes = createBiomes(scene, worldSeed);
 
   // Dedicated invisible plane so drops always raycast, even if grid/ground change.
   const dropPlane = new THREE.Mesh(
@@ -621,6 +679,7 @@ export function createWorld(canvas) {
     fauna,
     forageSources,
     sun,
+    seed: worldSeed,
     render() {
       renderer.render(scene, camera);
     },

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 let nextId = 1;
 
-export function spawnPickup(world, assets, type, position, { falling = true } = {}) {
+export function spawnPickup(world, assets, type, position, { falling = true, isWorldSpawned = false, spawnOrigin = null } = {}) {
   const mesh = assets.create(type);
   mesh.position.set(position.x, falling ? 1.15 : 0, position.z);
   mesh.userData = {
@@ -15,7 +15,15 @@ export function spawnPickup(world, assets, type, position, { falling = true } = 
     bobOff: Math.random() * Math.PI * 2,
   };
   world.scene.add(mesh);
-  const item = { id: mesh.userData.id, type, mesh };
+  const item = { 
+    id: mesh.userData.id, 
+    type, 
+    mesh,
+    isWorldSpawned,
+    spawnOrigin: spawnOrigin || { x: position.x, z: position.z },
+    respawnTimer: 0,
+    respawnDelay: 45.0, // 45s respawn delay for world pickups
+  };
   world.pickups.push(item);
   return item;
 }
@@ -27,6 +35,17 @@ export function removePickup(world, item) {
   item.mesh.traverse((o) => {
     if (o.geometry) o.geometry.dispose?.();
   });
+  
+  // If this was a world-spawned pickup, track it for respawn
+  if (item.isWorldSpawned && item.spawnOrigin) {
+    if (!world.pendingRespawns) world.pendingRespawns = [];
+    world.pendingRespawns.push({
+      type: item.type,
+      origin: item.spawnOrigin,
+      timer: 0,
+      delay: item.respawnDelay,
+    });
+  }
 }
 
 export function spawnBuilding(world, assets, type, position) {
@@ -85,42 +104,77 @@ export function updateWorldItems(world, dt) {
         if (world.pickups && typeof spawnPickup === 'function') {
           const assets = world.userData?.assets;
           if (assets) {
+            // Well water is NOT world-spawned (it's building-produced)
             spawnPickup(world, assets, 'water', {
               x: b.mesh.position.x + offsetX,
               z: b.mesh.position.z + offsetZ,
-            }, { falling: false });
+            }, { falling: false, isWorldSpawned: false });
           }
         }
       }
     }
   }
   
-  // Update forage sources cooldowns
+  // Update forage sources cooldowns and slow charge regeneration
   if (world.forageSources) {
     for (const source of world.forageSources) {
       if (source.cooldown > 0) {
         source.cooldown = Math.max(0, source.cooldown - dt);
-        // Visual feedback: dim when depleted
-        if (source.charges === 0) {
-          const alpha = 0.4 + 0.3 * (1 - source.cooldown / source.cooldownMax);
-          source.mesh.traverse((child) => {
-            if (child.material) {
-              child.material.opacity = alpha;
-              child.material.transparent = true;
-            }
-          });
-        }
-        // Recharge
+        
+        // When cooldown reaches 0, regenerate ONE charge (not full refill)
         if (source.cooldown === 0 && source.charges < source.chargesMax) {
-          source.charges = source.chargesMax;
+          source.charges += 1;
+          
+          // If still not at max, set cooldown for next charge
+          if (source.charges < source.chargesMax) {
+            source.cooldown = source.cooldownMax;
+          }
+          
+          // Visual feedback: restore opacity as charges return
+          const alpha = 0.4 + 0.6 * (source.charges / source.chargesMax);
           source.mesh.traverse((child) => {
             if (child.material) {
-              child.material.opacity = 1.0;
-              child.material.transparent = false;
+              if (source.charges === source.chargesMax) {
+                child.material.opacity = 1.0;
+                child.material.transparent = false;
+              } else {
+                child.material.opacity = alpha;
+                child.material.transparent = true;
+              }
             }
           });
         }
       }
+      
+      // Visual feedback: dim when depleted
+      if (source.charges === 0 && source.cooldown === 0) {
+        // Just depleted, start cooldown
+        source.cooldown = source.cooldownMax;
+        source.mesh.traverse((child) => {
+          if (child.material) {
+            child.material.opacity = 0.4;
+            child.material.transparent = true;
+          }
+        });
+      }
+    }
+  }
+  
+  // Handle pickup respawns
+  if (!world.pendingRespawns) world.pendingRespawns = [];
+  for (let i = world.pendingRespawns.length - 1; i >= 0; i--) {
+    const respawn = world.pendingRespawns[i];
+    respawn.timer += dt;
+    if (respawn.timer >= respawn.delay) {
+      // Respawn the pickup at its origin
+      const assets = world.userData?.assets;
+      if (assets) {
+        spawnPickup(world, assets, respawn.type, {
+          x: respawn.origin.x,
+          z: respawn.origin.z,
+        }, { falling: false, isWorldSpawned: true, spawnOrigin: respawn.origin });
+      }
+      world.pendingRespawns.splice(i, 1);
     }
   }
   
@@ -209,16 +263,43 @@ export function nearestForageSource(world, origin, harvestTypes) {
   return best ? { item: best, dist: bestD } : { item: null, dist: Infinity };
 }
 
-export function harvestForageSource(world, assets, source, agentPos) {
+export function harvestForageSource(world, assets, source, agentPos, hasTools = false) {
   if (!source || source.charges <= 0) return null;
-  source.charges -= 1;
+  
+  const harvestType = source.harvestType;
+  const isWoodOrStone = ['wood', 'stone', 'ore'].includes(harvestType);
+  
+  // Tools provide benefits for wood/stone/ore gathering
+  let chargesCost = 1;
+  let yieldMultiplier = 1;
+  
+  if (isWoodOrStone && hasTools) {
+    // With tools: harvest is more efficient
+    yieldMultiplier = 2; // Get 2 items instead of 1
+  } else if (isWoodOrStone && !hasTools) {
+    // Without tools: gathering wood/stone/ore is slower (costs 2 charges for 1 item)
+    // This makes the agent want to craft tools
+    chargesCost = Math.min(2, source.charges); // Take up to 2 charges
+  }
+  
+  source.charges = Math.max(0, source.charges - chargesCost);
   if (source.charges === 0) {
     source.cooldown = source.cooldownMax;
   }
-  // Spawn pickup at agent's feet
-  spawnPickup(world, assets, source.harvestType, {
-    x: agentPos.x,
-    z: agentPos.z,
-  }, { falling: false });
-  return source.harvestType;
+  
+  // Spawn pickup(s) at agent's feet - mark as world-spawned since it came from a forage source
+  for (let i = 0; i < yieldMultiplier; i++) {
+    const offsetX = (Math.random() - 0.5) * 0.3;
+    const offsetZ = (Math.random() - 0.5) * 0.3;
+    spawnPickup(world, assets, harvestType, {
+      x: agentPos.x + offsetX,
+      z: agentPos.z + offsetZ,
+    }, { 
+      falling: false, 
+      isWorldSpawned: true,
+      spawnOrigin: { x: agentPos.x + offsetX, z: agentPos.z + offsetZ }
+    });
+  }
+  
+  return harvestType;
 }

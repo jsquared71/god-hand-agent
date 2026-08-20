@@ -82,10 +82,10 @@ export class Brain {
     this.b2 = zeros(OUTPUT_SIZE);
     // Mild priors so the first minutes aren't pure noise.
     this.b2[0] = 0.15; // idle
-    this.b2[1] = 0.35; // seek_food
-    this.b2[2] = 0.1; // eat
-    this.b2[3] = 0.28; // seek_material
-    this.b2[4] = 0.05; // process
+    this.b2[1] = 0.15; // seek_food (lowered from 0.35 to reduce eager eating)
+    this.b2[2] = 0.05; // eat (lowered from 0.1)
+    this.b2[3] = 0.35; // seek_material (raised to prioritize gathering)
+    this.b2[4] = 0.08; // process (raised slightly)
     this.b2[5] = -0.05; // build
     this.last = null;
     this.lr = 0.018;

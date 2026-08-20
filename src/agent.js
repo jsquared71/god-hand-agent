@@ -30,6 +30,7 @@ const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_
 const MATERIAL_TYPES = ['wood', 'stone', 'ore', 'planks', 'ingot', 'grain', 'water', 'fish', 'dough', 'sticks'];
 const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
+const HUNGER_FOOD_THRESHOLD = 0.75; // Only seek/eat food when hunger drops to or below 75%
 
 export function createAgent(world, assets) {
   const group = assets.create('agent');
@@ -93,6 +94,7 @@ export function createAgent(world, assets) {
     const forageWood = nearestForageSource(world, group.position, ['wood']);
     const forageOre = nearestForageSource(world, group.position, ['ore']);
     const forageStone = nearestForageSource(world, group.position, ['stone']);
+    const forageWater = nearestForageSource(world, group.position, ['water']);
     
     return {
       food,
@@ -106,6 +108,7 @@ export function createAgent(world, assets) {
       forageWood,
       forageOre,
       forageStone,
+      forageWater,
       hasHut: world.buildings.some((b) => b.type === 'hut'),
       hasWorkbench: world.buildings.some((b) => b.type === 'workbench'),
       hasForageSources: world.forageSources && world.forageSources.some((s) => s.charges > 0),
@@ -161,17 +164,31 @@ export function createAgent(world, assets) {
       distForageStone: s.forageStone.dist,
     });
 
-    const { action, name } = brain.act(input);
+    let { action, name } = brain.act(input);
+    
+    // OVERRIDE: Do not allow seeking or eating food when hunger > 75%
+    if (state.hunger > HUNGER_FOOD_THRESHOLD && (name === 'seek_food' || name === 'eat')) {
+      // Force idle instead; let the brain learn to avoid food when full
+      action = 0; // idle
+      name = 'idle';
+    }
+    
     state.actionIndex = action;
     state.action = name;
 
+    // Reinforcement shaping: discourage food actions when above threshold
     let shape = (state.hunger - 0.5) * 0.08;
     if (state.hunger < 0.3) shape -= 0.15; // Strong penalty for being very hungry and not seeking food
-    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger < 0.7) shape += 0.08;
+    if (name === 'seek_food' && (s.food.item || s.forageFood.item) && state.hunger <= HUNGER_FOOD_THRESHOLD) shape += 0.08;
+    if (name === 'seek_food' && state.hunger > HUNGER_FOOD_THRESHOLD) shape -= 0.2; // Strong penalty for seeking food when full
+    if (name === 'eat' && state.hunger > HUNGER_FOOD_THRESHOLD) shape -= 0.2; // Strong penalty for trying to eat when full
     if (name === 'idle' && state.hunger < 0.3 && (s.food.item || s.forageFood.item)) shape -= 0.18;
-    if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
+    if (name === 'eat' && hasAnyFood(s) && state.hunger <= HUNGER_FOOD_THRESHOLD) shape += 0.05;
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
+    // Encourage tool crafting when lacking tools and needing wood/stone/ore
+    if (!state.hasTools && name === 'build' && nextBuild() === 'tools') shape += 0.12;
+    if (!state.hasTools && name === 'process' && state.inventory.ore >= 2) shape += 0.08; // Encourage smelting ore for tools
     if (name === 'seek_material' && (s.wood.item || s.forageWood.item)) shape += 0.02;
     if (name === 'seek_material' && state.hunger < 0.3) shape -= 0.1; // Penalty for gathering materials when very hungry
     brain.reinforce(shape);
@@ -282,7 +299,7 @@ export function createAgent(world, assets) {
   }
 
   function startForage(source) {
-    state.busy = { kind: 'forage', t: 0, dur: 1.2, source };
+    state.busy = { kind: 'forage', t: 0, dur: 1.2, source, hasTools: state.hasTools };
   }
 
   function finishBusy() {
@@ -329,7 +346,7 @@ export function createAgent(world, assets) {
       }
       brain.reinforce(1.15);
     } else if (b.kind === 'forage') {
-      const harvested = harvestForageSource(world, assets, b.source, group.position);
+      const harvested = harvestForageSource(world, assets, b.source, group.position, b.hasTools || false);
       if (harvested) {
         brain.reinforce(0.6);
       }
@@ -461,6 +478,7 @@ export function createAgent(world, assets) {
         const forageWood = s.forageWood.item;
         const forageGrain = nearestForageSource(world, group.position, ['grain']).item;
         const forageFood = s.forageFood.item;
+        const forageWater = s.forageWater.item;
         
         let bestTarget = null;
         let bestDist = Infinity;
@@ -484,6 +502,11 @@ export function createAgent(world, assets) {
         if (forageFood && s.forageFood.dist < bestDist) {
           bestTarget = forageFood;
           bestDist = s.forageFood.dist;
+          isForage = true;
+        }
+        if (forageWater && s.forageWater.dist < bestDist) {
+          bestTarget = forageWater;
+          bestDist = s.forageWater.dist;
           isForage = true;
         }
         
@@ -595,7 +618,9 @@ export function createAgent(world, assets) {
             : state.busy?.kind === 'build'
               ? 'Building'
               : state.busy?.kind === 'forage'
-                ? 'Gathering'
+                ? (state.hunger > HUNGER_FOOD_THRESHOLD && ['berry', 'grain', 'fish'].includes(state.busy.source?.harvestType) 
+                    ? 'Gathering' 
+                    : 'Gathering')
                 : ACTION_LABELS[state.action] || 'Idle';
       hud.action.textContent = busyBit;
     }

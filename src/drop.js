@@ -82,7 +82,8 @@ export function setupDrop(world, assets, camControls) {
     window.removeEventListener('pointercancel', onUp);
 
     if (hit) {
-      spawnPickup(world, assets, type, hit.point, { falling: true });
+      // Player-dropped resources are NOT world-spawned
+      spawnPickup(world, assets, type, hit.point, { falling: true, isWorldSpawned: false });
     }
   }
 

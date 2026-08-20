@@ -27,13 +27,13 @@ export const TAGS = {
 /** Base item definitions with their tags and properties */
 export const BASE_ITEMS = {
   // Raw materials
-  berry: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.22, time: 0.55, color: '#c41e5a', label: 'Berry' },
-  grain: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.38, time: 1.35, color: '#e8b923', label: 'Grain' },
+  berry: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.22, time: 2.8, color: '#c41e5a', label: 'Berry' },
+  grain: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.38, time: 3.8, color: '#e8b923', label: 'Grain' },
   wood: { tags: [TAGS.FUEL, TAGS.STRUCTURAL, TAGS.RAW], color: '#6b3f1d', label: 'Wood' },
   stone: { tags: [TAGS.SHARP, TAGS.STRUCTURAL, TAGS.RAW], color: '#8a8f99', label: 'Stone' },
   ore: { tags: [TAGS.METAL, TAGS.RAW], color: '#5a3228', label: 'Ore' },
-  water: { tags: [TAGS.LIQUID, TAGS.FOOD], hunger: 0.12, time: 0.4, color: '#4a9fc8', label: 'Water' },
-  fish: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.25, time: 0.7, color: '#78a8c4', label: 'Fish' },
+  water: { tags: [TAGS.LIQUID, TAGS.FOOD], hunger: 0.12, time: 2.0, color: '#4a9fc8', label: 'Water' },
+  fish: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.25, time: 3.2, color: '#78a8c4', label: 'Fish' },
   
   // Processed basics
   planks: { tags: [TAGS.STRUCTURAL, TAGS.PROCESSED], color: '#d4a574', label: 'Planks' },
@@ -41,9 +41,9 @@ export const BASE_ITEMS = {
   sticks: { tags: [TAGS.STRUCTURAL, TAGS.SHARP, TAGS.PROCESSED], color: '#8b6239', label: 'Sticks' },
   
   // Cooked food
-  bread: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, time: 0.9, color: '#c4843c', label: 'Bread' },
-  stew: { tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, time: 1.1, color: '#d46c3a', label: 'Stew' },
-  cooked_fish: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, time: 0.85, color: '#c89870', label: 'Cooked Fish' },
+  bread: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.72, time: 5.0, color: '#c4843c', label: 'Bread' },
+  stew: { tags: [TAGS.FOOD, TAGS.PROCESSED, TAGS.VESSEL], hunger: 0.85, time: 6.0, color: '#d46c3a', label: 'Stew' },
+  cooked_fish: { tags: [TAGS.FOOD, TAGS.PROCESSED], hunger: 0.78, time: 5.2, color: '#c89870', label: 'Cooked Fish' },
   
   // Buildings (not combinable, but in the system)
   workbench: { tags: [TAGS.STRUCTURAL, TAGS.CONTAINER], isBuilding: true, color: '#5c4033', label: 'Workbench' },
@@ -155,7 +155,8 @@ export class DiscoveryNotebook {
     // Derive stats from tags
     if (tags.includes(TAGS.FOOD)) {
       props.hunger = ((info1.hunger || 0) + (info2.hunger || 0)) * 0.7;
-      props.time = 1.0;
+      // Cooked/processed food takes longer to eat (5s), simple combinations take medium time (3s)
+      props.time = tags.includes(TAGS.PROCESSED) ? 5.0 : 3.0;
     }
     
     if (tags.includes(TAGS.SHARP) || tags.includes(TAGS.METAL)) {
@@ -331,7 +332,7 @@ export function getFoodValue(itemId, notebook) {
   
   for (const recipe of notebook.recipes.values()) {
     if (recipe.output === itemId && recipe.hunger) {
-      return { hunger: recipe.hunger, time: recipe.time || 1.0, energy: 0.05 };
+      return { hunger: recipe.hunger, time: recipe.time || 2.5, energy: 0.05 };
     }
   }
   

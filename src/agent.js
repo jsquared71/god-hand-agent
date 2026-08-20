@@ -425,7 +425,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     if (!rec) {
       // Fallback
-      rec = { hunger: 0.1, time: 0.5, energy: 0.02 };
+      rec = { hunger: 0.1, time: 2.5, energy: 0.02 };
     }
     
     state.busy = { kind: 'eat', t: 0, dur: rec.time, type, fromWorldItem };
@@ -444,11 +444,44 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
 
   function startForage(source) {
-    state.busy = { kind: 'forage', t: 0, dur: 1.2, source, hasTools: state.hasTools };
+    // Duration based on harvest type
+    const harvestType = source.harvestType || 'default';
+    let dur = 4.0; // default
+    
+    switch (harvestType) {
+      case 'water':
+        dur = 2.5;
+        break;
+      case 'berry':
+        dur = 3.5;
+        break;
+      case 'grain':
+        dur = 4.0;
+        break;
+      case 'fish':
+        dur = 6.0;
+        break;
+      case 'wood':
+        dur = 7.0;
+        break;
+      case 'stone':
+        dur = 7.0;
+        break;
+      case 'ore':
+        dur = 9.0;
+        break;
+    }
+    
+    // Tools reduce forage time to 75%
+    if (state.hasTools) {
+      dur *= 0.75;
+    }
+    
+    state.busy = { kind: 'forage', t: 0, dur, source, hasTools: state.hasTools };
   }
   
   function startCombine(item1, item2) {
-    state.busy = { kind: 'combine', t: 0, dur: 1.8, item1, item2 };
+    state.busy = { kind: 'combine', t: 0, dur: 5.0, item1, item2 };
   }
 
   function finishBusy() {
@@ -561,7 +594,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       return false;
     }
 
-    const speed = (state.sluggish ? 0.7 : 2.35) * (0.35 + 0.65 * state.energy);
+    const speed = (state.sluggish ? 0.7 : 1.55) * (0.35 + 0.65 * state.energy);
     const s = snap();
     const actName = state.action;
 

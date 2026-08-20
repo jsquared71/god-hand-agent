@@ -22,10 +22,6 @@ const drop = setupDrop(world, assets, cam);
 setupToolbar(drop);
 setupRecipeHud();
 
-// Spawn a few initial fish pickups in the water biome
-spawnPickup(world, assets, 'fish', { x: -3, z: -12 }, { falling: false });
-spawnPickup(world, assets, 'fish', { x: 0, z: -10 }, { falling: false });
-
 let last = performance.now();
 
 function frame(now) {

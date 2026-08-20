@@ -265,8 +265,8 @@ export function makeHut() {
   const backMidZ = -halfDepth / 2;
   const backPlane = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, slopeLength), roof));
   backPlane.position.set(0, backMidY, backMidZ);
-  // Rotate around X so the far edge (negative Z) is lower and near edge (toward center) is higher
-  backPlane.rotation.x = slopeAngle;
+  // Positive rotation.x moves local +Z toward -Y (down). Inner edge (+Z, toward ridge) must go UP, so use negative angle
+  backPlane.rotation.x = -slopeAngle;
   g.add(backPlane);
   
   // Front roof plane (positive Z side)
@@ -275,8 +275,8 @@ export function makeHut() {
   const frontMidZ = halfDepth / 2;
   const frontPlane = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, slopeLength), roof));
   frontPlane.position.set(0, frontMidY, frontMidZ);
-  // Rotate around X so the far edge (positive Z) is lower and near edge (toward center) is higher
-  frontPlane.rotation.x = -slopeAngle;
+  // Outer edge (+Z, toward eave) must go DOWN, so use positive angle
+  frontPlane.rotation.x = slopeAngle;
   g.add(frontPlane);
   
   // Ridge beam at the peak

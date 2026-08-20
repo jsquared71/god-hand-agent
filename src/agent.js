@@ -197,6 +197,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
 
     let { action, name } = brain.act(input);
     
+    // Remap eat to seek_material if already full
+    if (name === 'eat' && state.hunger >= 0.75) {
+      name = 'seek_material';
+      action = ACTION_NAMES.indexOf('seek_material');
+    }
+    
     state.actionIndex = action;
     state.action = name;
     
@@ -206,7 +212,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     // Minimal reinforcement shaping: needs-based only
     let shape = 0;
     if (state.hunger < 0.3) shape -= 0.15; // Penalty for being very hungry
-    if (name === 'eat' && hasAnyFood(s)) shape += 0.05;
+    if (name === 'eat' && hasAnyFood(s)) {
+      // Reward eating when hungry, penalize when full
+      if (state.hunger < 0.45) {
+        shape += 0.08;
+      } else if (state.hunger >= 0.75) {
+        shape -= 0.15;
+      }
+    }
     if (name === 'process' && canProcessAny()) shape += 0.03;
     if (name === 'build' && nextBuild()) shape += 0.04;
     if (name === 'combine' && canCombineAny()) shape += 0.02;
@@ -491,6 +504,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
 
   function startEat(type, fromWorldItem) {
+    // Don't eat if already full (satiety check)
+    if (state.hunger >= 0.75) {
+      return;
+    }
+    
     let rec = FOOD[type];
     
     // If not in base FOOD, check discovered items
@@ -699,27 +717,39 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         const target = getSideSlotTarget(food.mesh.position.x, food.mesh.position.z);
         const remain = walkToward(target.x, target.z, dt, speed);
         if (remain < PICKUP_RADIUS) {
-          startEat(food.type, food);
+          // If full, pick up food into inventory instead of eating
+          if (state.hunger >= 0.75) {
+            pickupIfClose([food.type]);
+          } else {
+            startEat(food.type, food);
+          }
           return false;
         }
         return true;
       } else {
         const inv = bestInvFood();
-        if (inv) startEat(inv, null);
+        if (inv && state.hunger < 0.75) startEat(inv, null);
         return false;
       }
     }
 
     if (actName === 'eat') {
       const inv = bestInvFood();
-      if (inv) {
+      if (inv && state.hunger < 0.75) {
         startEat(inv, null);
         return false;
       }
       if (s.food.item) {
         const target = getSideSlotTarget(s.food.item.mesh.position.x, s.food.item.mesh.position.z);
         const remain = walkToward(target.x, target.z, dt, speed);
-        if (remain < PICKUP_RADIUS) startEat(s.food.item.type, s.food.item);
+        if (remain < PICKUP_RADIUS) {
+          // If full, pick up instead of eating
+          if (state.hunger >= 0.75) {
+            pickupIfClose([s.food.item.type]);
+          } else {
+            startEat(s.food.item.type, s.food.item);
+          }
+        }
         return remain >= PICKUP_RADIUS;
       }
       brain.reinforce(-0.05);

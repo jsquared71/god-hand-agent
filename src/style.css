@@ -368,7 +368,7 @@ body::after {
   backdrop-filter: blur(10px);
   overflow-y: auto;
   overflow-x: hidden;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .recipes-title {

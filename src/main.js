@@ -62,6 +62,19 @@ const drop = setupDrop(world, assets, cam, gameState);
 setupToolbar(drop, gameState);
 setupRecipeHud(notebook);
 
+// Setup wheel event handler for recipes HUD to prevent world zoom when scrolling
+const recipesHud = document.getElementById('recipes-hud');
+if (recipesHud) {
+  recipesHud.addEventListener('wheel', (e) => {
+    const canScroll = recipesHud.scrollHeight > recipesHud.clientHeight;
+    if (canScroll) {
+      e.stopPropagation();
+      e.preventDefault();
+      recipesHud.scrollTop += e.deltaY;
+    }
+  }, { passive: false });
+}
+
 // Setup autosave restore HUD if autosave exists
 if (autosave) {
   pendingRestore = autosave;

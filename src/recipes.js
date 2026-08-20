@@ -64,8 +64,8 @@ export const BUILD = {
 
 export const TOOLS_PROCESS_MULT = 0.62;
 
-export const HUNGER_DRAIN = 0.011;
-export const HUNGER_DRAIN_NEAR_HUT = 0.0045;
+export const HUNGER_DRAIN = 0.0035;
+export const HUNGER_DRAIN_NEAR_HUT = 0.0014;
 export const HUT_RADIUS = 2.4;
 export const WORKBENCH_RADIUS = 1.7;
 export const PICKUP_RADIUS = 0.85;
@@ -94,4 +94,55 @@ export function inventoryEmpty(inv) {
 
 export function emptyInventory() {
   return Object.fromEntries(ALL_ITEM_TYPES.map((t) => [t, 0]));
+}
+
+function formatCost(costObj) {
+  return Object.entries(costObj)
+    .map(([material, count]) => {
+      const label = LABELS[material] || material;
+      const color = COLORS[material] || '#888';
+      return `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${color}"></span>${count} ${label.toLowerCase()}</span>`;
+    })
+    .join(' + ');
+}
+
+export function setupRecipeHud() {
+  const recipesList = document.getElementById('recipes-list');
+  if (!recipesList) return;
+
+  let html = '';
+
+  html += '<div class="recipe-section">';
+  html += '<div class="recipe-section-title">Process</div>';
+  
+  Object.entries(PROCESS).forEach(([input, recipe]) => {
+    const inputLabel = LABELS[input] || input;
+    const outputLabel = LABELS[recipe.out] || recipe.out;
+    const inputColor = COLORS[input] || '#888';
+    
+    html += '<div class="recipe-item">';
+    html += `<span class="recipe-output">${outputLabel}</span>`;
+    html += '<span class="recipe-cost">';
+    html += `<span class="recipe-cost-item"><span class="recipe-cost-dot" style="background:${inputColor}"></span>1 ${inputLabel.toLowerCase()}</span>`;
+    html += '</span>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+
+  html += '<div class="recipe-section">';
+  html += '<div class="recipe-section-title">Build</div>';
+  
+  Object.entries(BUILD).forEach(([buildType, recipe]) => {
+    const label = LABELS[buildType] || buildType;
+    
+    html += '<div class="recipe-item">';
+    html += `<span class="recipe-output">${label}</span>`;
+    html += `<span class="recipe-cost">${formatCost(recipe.cost)}</span>`;
+    html += '</div>';
+  });
+
+  html += '</div>';
+
+  recipesList.innerHTML = html;
 }

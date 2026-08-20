@@ -69,31 +69,31 @@ export const LABELS = {
 
 /** Food-only items. Grain is dual-use (eat or mill into bread). */
 export const FOOD = {
-  berry: { hunger: 0.22, time: 0.55, energy: 0.04 },
-  grain: { hunger: 0.38, time: 1.35, energy: 0.06 },
-  water: { hunger: 0.12, time: 0.4, energy: 0.03 },
-  bread: { hunger: 0.72, time: 0.9, energy: 0.12 },
-  stew: { hunger: 0.85, time: 1.1, energy: 0.15 },
-  fish: { hunger: 0.25, time: 0.7, energy: 0.05 },
-  cooked_fish: { hunger: 0.78, time: 0.85, energy: 0.14 },
+  berry: { hunger: 0.22, time: 2.8, energy: 0.04 },
+  grain: { hunger: 0.38, time: 3.8, energy: 0.06 },
+  water: { hunger: 0.12, time: 2.0, energy: 0.03 },
+  bread: { hunger: 0.72, time: 5.0, energy: 0.12 },
+  stew: { hunger: 0.85, time: 6.0, energy: 0.15 },
+  fish: { hunger: 0.25, time: 3.2, energy: 0.05 },
+  cooked_fish: { hunger: 0.78, time: 5.2, energy: 0.14 },
 };
 
 export const PROCESS = {
-  wood: { out: 'planks', time: 4.0, benchTime: 1.6 },
-  ore: { out: 'ingot', time: 5.5, benchTime: 2.0 },
-  grain: { out: 'bread', time: 3.5, benchTime: 1.4, inputs: { grain: 1, water: 1 } },
-  berry: { out: 'stew', time: 4.2, benchTime: 1.8, cookTime: 1.2, inputs: { berry: 1, water: 1 } },
-  fish: { out: 'cooked_fish', time: 6.0, benchTime: 2.5, cookTime: 1.5 },
-  planks: { out: 'sticks', outCount: 2, time: 2.5, benchTime: 1.0 },
+  wood: { out: 'planks', time: 8.0, benchTime: 4.0 },
+  ore: { out: 'ingot', time: 12.0, benchTime: 6.0 },
+  grain: { out: 'bread', time: 8.0, benchTime: 5.0, inputs: { grain: 1, water: 1 } },
+  berry: { out: 'stew', time: 9.0, benchTime: 5.0, cookTime: 6.0, inputs: { berry: 1, water: 1 } },
+  fish: { out: 'cooked_fish', time: 10.0, benchTime: 6.0, cookTime: 7.0 },
+  planks: { out: 'sticks', outCount: 2, time: 5.0, benchTime: 2.5 },
 };
 
 export const BUILD = {
-  workbench: { cost: { planks: 2 }, time: 2.2 },
-  hut: { cost: { planks: 3, stone: 2 }, time: 3.4 },
-  fire: { cost: { wood: 2, stone: 1 }, time: 2.8 },
-  well: { cost: { stone: 3, planks: 1 }, time: 3.2 },
-  chest: { cost: { planks: 3 }, time: 2.5 },
-  tools: { cost: { ingot: 2 }, time: 1.6 },
+  workbench: { cost: { planks: 2 }, time: 12 },
+  hut: { cost: { planks: 3, stone: 2 }, time: 22 },
+  fire: { cost: { wood: 2, stone: 1 }, time: 10 },
+  well: { cost: { stone: 3, planks: 1 }, time: 18 },
+  chest: { cost: { planks: 3 }, time: 12 },
+  tools: { cost: { ingot: 2 }, time: 8 },
 };
 
 export const TOOLS_PROCESS_MULT = 0.62;

@@ -243,29 +243,46 @@ export function makeHut() {
   doorFrameInner.position.set(0, (height - lintelHeight) / 2, depth / 2 - wallThick / 4);
   g.add(doorFrameInner);
   
+  // Gable/A-frame roof: ridge along +X at center, slopes in ±Z
+  // Ridge is ABOVE walls, eaves sit on wall tops with overhang
   const roofOverhang = 0.3;
-  const roofWidth = width + roofOverhang * 2;
-  const roofDepth = depth / 2 + roofOverhang;
-  const roofAngle = 0.6;
+  const roofWidth = width + roofOverhang * 2; // along X (ridge direction)
+  const roofRise = 1.1; // height from wall top to ridge peak
+  const halfDepth = depth / 2 + roofOverhang; // distance from center to eave in Z
   
-  // Back roof plane: tilts up from back wall toward peak (center)
-  // Rotation should be negative to tilt the far edge UP
-  const r1 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
-  r1.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, -roofDepth * Math.cos(roofAngle) * 0.5);
-  r1.rotation.x = -roofAngle;
-  g.add(r1);
+  // Eaves are at wall top height
+  const eaveHeight = height;
+  // Ridge is above that
+  const ridgeHeight = height + roofRise;
   
-  // Front roof plane: tilts up from front wall toward peak (center)
-  // Rotation should be positive to tilt the far edge UP
-  const r2 = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, roofDepth * 1.15), roof));
-  r2.position.set(0, height + roofDepth * Math.sin(roofAngle) * 0.5, roofDepth * Math.cos(roofAngle) * 0.5);
-  r2.rotation.x = roofAngle;
-  g.add(r2);
+  // Each roof plane: thin box from ridge (high) to eave (low)
+  const slopeLength = Math.hypot(roofRise, halfDepth);
+  const slopeAngle = Math.atan2(roofRise, halfDepth); // angle from horizontal
   
-  const peakHeight = height + roofDepth * Math.sin(roofAngle);
-  const peak = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth + 0.05, 0.12, 0.18), roof));
-  peak.position.y = peakHeight;
-  g.add(peak);
+  // Back roof plane (negative Z side)
+  // Midpoint between ridge (0, ridgeHeight, 0) and back eave (0, eaveHeight, -halfDepth)
+  const backMidY = (ridgeHeight + eaveHeight) / 2;
+  const backMidZ = -halfDepth / 2;
+  const backPlane = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, slopeLength), roof));
+  backPlane.position.set(0, backMidY, backMidZ);
+  // Rotate around X so the far edge (negative Z) is lower and near edge (toward center) is higher
+  backPlane.rotation.x = slopeAngle;
+  g.add(backPlane);
+  
+  // Front roof plane (positive Z side)
+  // Midpoint between ridge (0, ridgeHeight, 0) and front eave (0, eaveHeight, +halfDepth)
+  const frontMidY = (ridgeHeight + eaveHeight) / 2;
+  const frontMidZ = halfDepth / 2;
+  const frontPlane = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth, 0.12, slopeLength), roof));
+  frontPlane.position.set(0, frontMidY, frontMidZ);
+  // Rotate around X so the far edge (positive Z) is lower and near edge (toward center) is higher
+  frontPlane.rotation.x = -slopeAngle;
+  g.add(frontPlane);
+  
+  // Ridge beam at the peak
+  const ridgeBeam = shadow(new THREE.Mesh(new THREE.BoxGeometry(roofWidth + 0.1, 0.15, 0.15), roof));
+  ridgeBeam.position.y = ridgeHeight;
+  g.add(ridgeBeam);
   
   return sitOnGround(g);
 }

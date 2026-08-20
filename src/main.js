@@ -21,14 +21,7 @@ const canvas = document.getElementById('game');
 // Check for localStorage autosave and use its seed if restoring
 const autosave = loadFromLocalStorage();
 let worldSeed = null;
-if (autosave) {
-  const restore = confirm(
-    `Found autosave from ${new Date(autosave.timestamp).toLocaleString()}. Restore it?`
-  );
-  if (restore) {
-    worldSeed = autosave.seed || null; // Use saved seed
-  }
-}
+let pendingRestore = null;
 
 const world = createWorld(canvas, worldSeed);
 const cam = setupControls(world);
@@ -66,13 +59,85 @@ const drop = setupDrop(world, assets, cam, gameState);
 setupToolbar(drop, gameState);
 setupRecipeHud(notebook);
 
-// Restore world state if autosave was confirmed
-if (autosave && worldSeed !== null) {
-  deserializeWorld(autosave, world, agents, assets, world.camera, gameState, notebook);
-  updateRecipeHud(notebook);
+// Setup autosave restore HUD if autosave exists
+if (autosave) {
+  pendingRestore = autosave;
+  showRestoreHud(autosave);
 } else {
   // Spawn initial food pickups for new world
   spawnInitialFood();
+}
+
+function showRestoreHud(saveData) {
+  const restoreHud = document.createElement('div');
+  restoreHud.id = 'restore-hud';
+  restoreHud.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    min-width: 320px;
+    text-align: center;
+  `;
+  
+  restoreHud.innerHTML = `
+    <div style="font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">
+      Autosave Found
+    </div>
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+      ${new Date(saveData.timestamp).toLocaleString()}
+    </div>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button id="restore-btn" style="
+        appearance: none;
+        border: 1px solid rgba(106, 196, 184, 0.4);
+        background: linear-gradient(180deg, rgba(106, 196, 184, 0.2), rgba(106, 196, 184, 0.08));
+        color: var(--energy);
+        padding: 10px 20px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font);
+        transition: all 0.15s ease;
+      ">Restore</button>
+      <button id="new-world-btn" style="
+        appearance: none;
+        border: 1px solid rgba(212, 160, 23, 0.4);
+        background: linear-gradient(180deg, rgba(212, 160, 23, 0.15), rgba(212, 160, 23, 0.05));
+        color: var(--accent);
+        padding: 10px 20px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font);
+        transition: all 0.15s ease;
+      ">New World</button>
+    </div>
+  `;
+  
+  document.body.appendChild(restoreHud);
+  
+  document.getElementById('restore-btn').addEventListener('click', () => {
+    deserializeWorld(saveData, world, agents, assets, world.camera, gameState, notebook);
+    updateRecipeHud(notebook);
+    restoreHud.remove();
+    pendingRestore = null;
+  });
+  
+  document.getElementById('new-world-btn').addEventListener('click', () => {
+    spawnInitialFood();
+    restoreHud.remove();
+    pendingRestore = null;
+  });
 }
 
 function spawnInitialFood() {
@@ -111,10 +176,40 @@ if (loadBtn) {
       updateRecipeHud(notebook);
     } catch (err) {
       if (err.message !== 'No file selected') {
-        alert('Failed to load save file. Check console for details.');
+        showNotification('Failed to load save file. Check console for details.', 'error');
+        console.error('Load error:', err);
       }
     }
   });
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 200;
+    background: ${type === 'error' ? 'rgba(212, 78, 32, 0.95)' : 'var(--panel)'};
+    border: 1px solid ${type === 'error' ? 'rgba(212, 78, 32, 1)' : 'var(--panel-border)'};
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 300px;
+    animation: slideIn 0.3s ease;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
 }
 
 // Keyboard shortcuts
@@ -129,6 +224,7 @@ window.addEventListener('keydown', (e) => {
 startAutosave(world, agents, world.camera, gameState, notebook);
 
 let last = performance.now();
+let frameErrorLogged = false;
 
 function updateFavor(dt) {
   // Base regen
@@ -171,33 +267,41 @@ function updateFavor(dt) {
 }
 
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
-  cam.update();
-  world.updateDayNight(dt);
-  updateWorldItems(world, dt);
-  updateFavor(dt);
-  
-  // Fire crackle loop
-  const hasFire = world.buildings.some(b => b.type === 'fire');
-  if (hasFire && !gameState.fireCrackleActive) {
-    startFireCrackle();
-    gameState.fireCrackleActive = true;
-  } else if (!hasFire && gameState.fireCrackleActive) {
-    stopFireCrackle();
-    gameState.fireCrackleActive = false;
+  try {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    cam.update();
+    world.updateDayNight(dt);
+    updateWorldItems(world, dt);
+    updateFavor(dt);
+    
+    // Fire crackle loop
+    const hasFire = world.buildings.some(b => b.type === 'fire');
+    if (hasFire && !gameState.fireCrackleActive) {
+      startFireCrackle();
+      gameState.fireCrackleActive = true;
+    } else if (!hasFire && gameState.fireCrackleActive) {
+      stopFireCrackle();
+      gameState.fireCrackleActive = false;
+    }
+    
+    for (const agent of agents) {
+      agent.update(dt);
+    }
+    
+    // Update recipe HUD periodically (every ~60 frames)
+    if (Math.random() < 0.016) {
+      updateRecipeHud(notebook);
+    }
+    
+    world.render();
+  } catch (error) {
+    if (!frameErrorLogged) {
+      console.error('Frame loop error:', error);
+      showNotification('Game error occurred. Check console for details.', 'error');
+      frameErrorLogged = true;
+    }
   }
-  
-  for (const agent of agents) {
-    agent.update(dt);
-  }
-  
-  // Update recipe HUD periodically (every ~60 frames)
-  if (Math.random() < 0.016) {
-    updateRecipeHud(notebook);
-  }
-  
-  world.render();
   requestAnimationFrame(frame);
 }
 

@@ -26,6 +26,7 @@ import {
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
+import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue } from './discovery.js';
 
 const FORAGE_RADIUS = 1.2;
 const THINK_DT = 0.28;
@@ -158,7 +159,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     let hasVehicle = false;
     
     if (state.notebook) {
-      const { itemHasTag, TAGS } = require('./discovery.js');
       for (const [itemId, count] of Object.entries(state.inventory)) {
         if (count > 0) {
           if (itemHasTag(itemId, TAGS.SHARP, state.notebook)) hasSharp = true;
@@ -244,7 +244,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
   function hasAnyFood(s) {
     // Check inventory for food items
     if (state.notebook) {
-      const { isFood } = require('./discovery.js');
       for (const [itemId, count] of Object.entries(state.inventory)) {
         if (count > 0 && isFood(itemId, state.notebook)) return true;
       }
@@ -288,7 +287,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
       return;
     }
     
-    const { getGatherMult } = require('./discovery.js');
     let best = 1.0;
     
     for (const [itemId, count] of Object.entries(state.inventory)) {
@@ -333,7 +331,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     
     // Check discovered food items
     if (state.notebook) {
-      const { isFood, getFoodValue } = require('./discovery.js');
       let best = null;
       let bestHunger = 0;
       
@@ -418,7 +415,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
     
     // If not in base FOOD, check discovered items
     if (!rec && state.notebook) {
-      const { getFoodValue } = require('./discovery.js');
       const foodVal = getFoodValue(type, state.notebook);
       if (foodVal) {
         rec = foodVal;
@@ -462,7 +458,6 @@ export function createAgent(world, assets, priors = null, notebook = null) {
       
       // Check discovered food
       if (!rec && state.notebook) {
-        const { getFoodValue } = require('./discovery.js');
         const foodVal = getFoodValue(b.type, state.notebook);
         if (foodVal) rec = foodVal;
       }

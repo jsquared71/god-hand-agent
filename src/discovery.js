@@ -22,6 +22,7 @@ export const TAGS = {
   LIQUID: 'liquid',
   PROCESSED: 'processed',
   RAW: 'raw',
+  MEDICINE: 'medicine',
 };
 
 /** Base item definitions with their tags and properties */
@@ -34,9 +35,9 @@ export const BASE_ITEMS = {
   ore: { tags: [TAGS.METAL, TAGS.RAW], color: '#5a3228', label: 'Ore', bases: ['ore'] },
   water: { tags: [TAGS.LIQUID, TAGS.FOOD], hunger: 0.12, time: 2.0, color: '#4a9fc8', label: 'Water', bases: ['water'] },
   fish: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.25, time: 3.2, color: '#78a8c4', label: 'Fish', bases: ['fish'] },
-  mushroom: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.2, time: 2.5, color: '#d4745a', label: 'Mushroom', bases: ['mushroom'] },
+  mushroom: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.MEDICINE], hunger: 0.2, time: 2.5, health: 0.15, color: '#d4745a', label: 'Mushroom', bases: ['mushroom'] },
   fruit: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.24, time: 2.9, color: '#e85a4a', label: 'Fruit', bases: ['fruit'] },
-  herb: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER], hunger: 0.15, time: 2.2, color: '#6a8a4a', label: 'Herb', bases: ['herb'] },
+  herb: { tags: [TAGS.FOOD, TAGS.RAW, TAGS.FIBER, TAGS.MEDICINE], hunger: 0.15, time: 2.2, health: 0.25, color: '#6a8a4a', label: 'Herb', bases: ['herb'] },
   meat: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.35, time: 4.0, color: '#a84a3a', label: 'Meat', bases: ['meat'] },
   egg: { tags: [TAGS.FOOD, TAGS.RAW], hunger: 0.28, time: 3.0, color: '#f0e8c0', label: 'Egg', bases: ['egg'] },
   milk: { tags: [TAGS.FOOD, TAGS.LIQUID], hunger: 0.22, time: 2.5, color: '#f8f4e0', label: 'Milk', bases: ['milk'] },
@@ -105,6 +106,11 @@ const SEED_DISCOVERIES = [
   // Vehicles
   { inputs: ['structural', 'wheel'], output: 'wagon', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 2.0, capacity: 4, label: 'Wagon', bases: ['wood'] },
   { inputs: ['wood', 'wheel'], output: 'cart', tags: [TAGS.VEHICLE, TAGS.MOBILE], speedBoost: 1.5, capacity: 2, label: 'Cart', bases: ['wood'] },
+  
+  // Medicine
+  { inputs: ['herb', 'water'], output: 'herbal_tea', tags: [TAGS.FOOD, TAGS.MEDICINE, TAGS.LIQUID], hunger: 0.2, health: 0.4, time: 3.0, label: 'Herbal Tea', bases: ['herb', 'water'] },
+  { inputs: ['herb', 'mushroom'], output: 'poultice', tags: [TAGS.MEDICINE], health: 0.5, time: 2.5, label: 'Poultice', bases: ['herb', 'mushroom'] },
+  { inputs: ['herb', 'herb'], output: 'salve', tags: [TAGS.MEDICINE], health: 0.45, time: 3.0, label: 'Salve', bases: ['herb'] },
 ];
 
 /** Discovery state: recipes found during play */
@@ -156,17 +162,30 @@ export class DiscoveryNotebook {
     const info2 = this._getItemInfo(item2);
     
     // Blend tags (union)
-    const tags = [...new Set([...info1.tags, ...info2.tags])];
+    let tags = [...new Set([...info1.tags, ...info2.tags])];
     
     // Compute merged bases
     const bases1 = info1.bases || [item1];
     const bases2 = info2.bases || [item2];
     const mergedBases = [...new Set([...bases1, ...bases2])].sort();
     
+    // Infer MEDICINE tag from inputs
+    const hasHerb = mergedBases.includes('herb') || info1.tags.includes(TAGS.MEDICINE) || info2.tags.includes(TAGS.MEDICINE);
+    const hasMushroom = mergedBases.includes('mushroom');
+    const hasWaterInput = item1 === 'water' || item2 === 'water';
+    const hasFireInput = item1 === 'fire' || item2 === 'fire';
+    
+    // Add MEDICINE tag if herb is mixed with water, fire, or mushroom
+    if (hasHerb && (hasWaterInput || hasFireInput || hasMushroom)) {
+      if (!tags.includes(TAGS.MEDICINE)) {
+        tags.push(TAGS.MEDICINE);
+      }
+    }
+    
     // Check if both inputs are FOOD
     const bothFood = info1.tags.includes(TAGS.FOOD) && info2.tags.includes(TAGS.FOOD);
-    const hasWater = item1 === 'water' || item2 === 'water';
-    const hasFire = item1 === 'fire' || item2 === 'fire';
+    const hasWater = hasWaterInput;
+    const hasFire = hasFireInput;
     
     let output;
     let discovered = true;
@@ -213,6 +232,16 @@ export class DiscoveryNotebook {
       props.hunger = ((info1.hunger || 0) + (info2.hunger || 0)) * 0.7;
       // Cooked/processed food takes longer to eat (5s), simple combinations take medium time (3s)
       props.time = tags.includes(TAGS.PROCESSED) ? 5.0 : 3.0;
+    }
+    
+    // Medicine healing power
+    if (tags.includes(TAGS.MEDICINE)) {
+      props.health = ((info1.health || 0) + (info2.health || 0)) * 0.8;
+      // If neither input has explicit health value, assign based on medicine strength
+      if (props.health === 0) {
+        props.health = 0.35; // Default medicine strength
+      }
+      props.time = props.time || 2.5;
     }
     
     if (tags.includes(TAGS.SHARP) || tags.includes(TAGS.METAL)) {
@@ -414,4 +443,26 @@ export function getFoodValue(itemId, notebook) {
   }
   
   return null;
+}
+
+/**
+ * Get health restoration value for medicine item
+ */
+export function getHealthValue(itemId, notebook) {
+  if (BASE_ITEMS[itemId]?.health) return BASE_ITEMS[itemId];
+  
+  for (const recipe of notebook.recipes.values()) {
+    if (recipe.output === itemId && recipe.health) {
+      return { health: recipe.health, time: recipe.time || 2.5 };
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Check if item is medicine
+ */
+export function isMedicine(itemId, notebook) {
+  return itemHasTag(itemId, TAGS.MEDICINE, notebook);
 }

@@ -26,7 +26,7 @@ import {
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
-import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue } from './discovery.js';
+import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue, isMedicine, getHealthValue } from './discovery.js';
 
 const FORAGE_RADIUS = 1.2;
 const HUNT_RADIUS = 1.5;
@@ -66,6 +66,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     name,
     hunger: 0.62,
     energy: 1,
+    health: 1.0, // Health stat (1 = full health, 0 = critical)
     entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
     wanderlust: 0.0, // Place-novelty drive (0 = content, 1 = restless)
     inventory: emptyInventory(),
@@ -455,6 +456,15 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       brain.reinforce(-0.2);
       return;
     }
+    
+    // Prioritize medicine when health is critically low
+    if (state.health < 0.3 && hasAnyMedicine(s)) {
+      state.action = 'use_medicine';
+      state.actionIndex = 0;
+      state.target = null;
+      state.wantBubble = 'Healing';
+      return;
+    }
 
     // Compute tag flags
     let hasSharp = false;
@@ -549,6 +559,22 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       }
     }
     
+    // Health-based behavior modification: prefer medicine when health is low
+    if (state.health < 0.5 && state.hunger > 0.25) {
+      const hasHerbOrMushroom = (state.inventory.herb || 0) > 0 || (state.inventory.mushroom || 0) > 0;
+      const canGatherHerb = s.forageFood.item && s.forageFood.item.harvestType === 'herb';
+      const canGatherMushroom = s.forageFood.item && s.forageFood.item.harvestType === 'mushroom';
+      
+      // If we have medicine ingredients, try to combine
+      if (hasHerbOrMushroom && canCombineAny() && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
+        name = 'combine';
+        action = ACTION_NAMES.indexOf(name);
+      } else if ((canGatherHerb || canGatherMushroom) && (name === 'eat' || name === 'idle')) {
+        name = 'seek_food';
+        action = ACTION_NAMES.indexOf(name);
+      }
+    }
+    
     // Itch-based behavior modification: prefer activities that could yield the wanted tag
     if (state.itch > 0.55 && state.hunger > 0.3) {
       const canSeekMaterial = (s.wood.item || s.forageWood.item || s.ore.item || s.forageOre.item || s.stone.item || s.forageStone.item);
@@ -632,6 +658,35 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       !!(s && s.food.item) ||
       !!(s && s.forageFood.item)
     );
+  }
+  
+  function hasAnyMedicine(s) {
+    // Check inventory for medicine items
+    if (state.notebook) {
+      for (const [itemId, count] of Object.entries(state.inventory)) {
+        if (count > 0 && isMedicine(itemId, state.notebook)) return true;
+      }
+    }
+    return false;
+  }
+  
+  function bestInvMedicine() {
+    if (!state.notebook) return null;
+    
+    let best = null;
+    let bestHealth = 0;
+    
+    for (const [itemId, count] of Object.entries(state.inventory)) {
+      if (count > 0 && isMedicine(itemId, state.notebook)) {
+        const healthVal = getHealthValue(itemId, state.notebook);
+        if (healthVal && healthVal.health > bestHealth) {
+          best = itemId;
+          bestHealth = healthVal.health;
+        }
+      }
+    }
+    
+    return best;
   }
   
   function getItemBases(itemId) {
@@ -1057,6 +1112,24 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     state.busy = { kind: 'eat', t: 0, dur: rec.time, type, fromWorldItem };
   }
+  
+  function startUseMedicine(type, fromWorldItem) {
+    let rec = null;
+    
+    if (state.notebook) {
+      const healthVal = getHealthValue(type, state.notebook);
+      if (healthVal) {
+        rec = healthVal;
+      }
+    }
+    
+    if (!rec) {
+      // Fallback for medicine
+      rec = { health: 0.3, time: 2.5 };
+    }
+    
+    state.busy = { kind: 'use_medicine', t: 0, dur: rec.time, type, fromWorldItem };
+  }
 
   function startProcess(inputType) {
     const atBench = !!benchNear();
@@ -1169,6 +1242,10 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       
       state.hunger = Math.min(1, state.hunger + rec.hunger);
       state.energy = Math.min(1, state.energy + rec.energy);
+      // Eating also restores some health (more if medicine tag)
+      const isMed = state.notebook && isMedicine(b.type, state.notebook);
+      const healthBoost = isMed ? (rec.health || rec.hunger * 0.5) : (rec.hunger * 0.2);
+      state.health = Math.min(1, state.health + healthBoost);
       if (b.fromWorldItem && world.pickups.includes(b.fromWorldItem)) {
         removePickup(world, b.fromWorldItem);
       } else {
@@ -1279,6 +1356,23 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       if (tended) {
         brain.reinforce(0.7);
       }
+    } else if (b.kind === 'use_medicine') {
+      let rec = null;
+      
+      if (state.notebook) {
+        const healthVal = getHealthValue(b.type, state.notebook);
+        if (healthVal) rec = healthVal;
+      }
+      
+      if (!rec) rec = { health: 0.3 };
+      
+      state.health = Math.min(1, state.health + rec.health);
+      if (b.fromWorldItem && world.pickups.includes(b.fromWorldItem)) {
+        removePickup(world, b.fromWorldItem);
+      } else {
+        state.inventory[b.type] = Math.max(0, state.inventory[b.type] - 1);
+      }
+      brain.reinforce(0.85);
     }
   }
 
@@ -1672,6 +1766,16 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       }
       return false;
     }
+    
+    if (actName === 'use_medicine') {
+      const medicine = bestInvMedicine();
+      if (medicine) {
+        startUseMedicine(medicine, null);
+        return false;
+      }
+      brain.reinforce(-0.05);
+      return false;
+    }
 
     return false;
   }
@@ -1705,27 +1809,31 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (hud.action) {
       const busy = state.busy?.kind === 'eat'
         ? 'Eating'
-        : state.busy?.kind === 'process'
-          ? 'Crafting'
-          : state.busy?.kind === 'build'
-            ? 'Building'
-            : state.busy?.kind === 'combine'
-              ? 'Inventing'
-              : state.busy?.kind === 'forage'
-                ? 'Gathering'
-                : state.action === 'seek_food'
-                  ? 'Seeking food'
-                  : state.action === 'seek_material'
-                    ? 'Gathering'
-                    : state.action === 'idle-hungry'
-                      ? 'Starving'
-                      : state.action === 'process'
-                        ? 'Crafting'
-                        : state.action === 'build'
-                          ? 'Building'
-                          : state.action === 'combine'
-                            ? 'Inventing'
-                            : 'Idle';
+        : state.busy?.kind === 'use_medicine'
+          ? 'Healing'
+          : state.busy?.kind === 'process'
+            ? 'Crafting'
+            : state.busy?.kind === 'build'
+              ? 'Building'
+              : state.busy?.kind === 'combine'
+                ? 'Inventing'
+                : state.busy?.kind === 'forage'
+                  ? 'Gathering'
+                  : state.action === 'seek_food'
+                    ? 'Seeking food'
+                    : state.action === 'seek_material'
+                      ? 'Gathering'
+                      : state.action === 'idle-hungry'
+                        ? 'Starving'
+                        : state.action === 'use_medicine'
+                          ? 'Healing'
+                          : state.action === 'process'
+                            ? 'Crafting'
+                            : state.action === 'build'
+                              ? 'Building'
+                              : state.action === 'combine'
+                                ? 'Inventing'
+                                : 'Idle';
       hud.action.textContent = busy;
     }
     
@@ -1794,6 +1902,40 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else {
       state.sluggish = false;
       state.energy = Math.min(1, state.energy + 0.015 * dt);
+    }
+    
+    // Health updates
+    let healthDrain = 0;
+    let healthRegen = 0;
+    
+    // Drain health when starving
+    if (state.hunger < 0.1) {
+      healthDrain += 0.02 * dt;
+    }
+    
+    // Drain health when very low energy
+    if (state.energy < 0.2) {
+      healthDrain += 0.015 * dt;
+    }
+    
+    // Drain health at night if not near hut or fire
+    if (isNight && !isProtected) {
+      healthDrain += 0.018 * dt;
+    }
+    
+    // Recover health when conditions are good
+    if (state.hunger > 0.4 && isProtected) {
+      healthRegen += 0.04 * dt;
+    } else if (state.hunger > 0.4 && nearFire) {
+      healthRegen += 0.03 * dt;
+    }
+    
+    // Apply health changes
+    state.health = Math.max(0, Math.min(1, state.health - healthDrain + healthRegen));
+    
+    // Make agent sluggish when health is low
+    if (state.health < 0.25) {
+      state.sluggish = true;
     }
     
     // Entertainment updates

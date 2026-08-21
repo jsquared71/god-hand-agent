@@ -15,6 +15,7 @@ import {
 } from './save.js';
 import { startFireCrackle, stopFireCrackle } from './audio.js';
 import { DiscoveryNotebook } from './discovery.js';
+import { createLabelRenderer, createNameTag, updateHealthBar, resizeLabelRenderer } from './nametags.js';
 
 const canvas = document.getElementById('game');
 
@@ -25,6 +26,7 @@ let pendingRestore = null;
 
 const world = createWorld(canvas, worldSeed);
 const cam = setupControls(world);
+const labelRenderer = createLabelRenderer(canvas);
 const assets = new AssetLibrary();
 
 await assets.preload();
@@ -56,6 +58,15 @@ const agent2 = createAgent(world, assets, {
 agent2.group.position.set(1.5, 2.4, 0.8);
 
 const agents = [agent1, agent2];
+
+// Add name tags to agents
+const nameTag1 = createNameTag('Ava');
+agent1.group.add(nameTag1);
+agent1.nameTag = nameTag1;
+
+const nameTag2 = createNameTag('Bo');
+agent2.group.add(nameTag2);
+agent2.nameTag = nameTag2;
 
 // Register agents on world so they can see each other for collision
 world.agents = agents;
@@ -241,6 +252,11 @@ window.addEventListener('keydown', (e) => {
 // Start autosave timer (need to update this function signature)
 startAutosave(world, agents, world.camera, gameState, notebook);
 
+// Handle window resize for label renderer
+window.addEventListener('resize', () => {
+  resizeLabelRenderer(labelRenderer, canvas);
+});
+
 let last = performance.now();
 let frameErrorLogged = false;
 
@@ -306,6 +322,10 @@ function frame(now) {
     for (const agent of agents) {
       try {
         agent.update(dt);
+        // Update health bar
+        if (agent.nameTag) {
+          updateHealthBar(agent.nameTag, agent.state.health);
+        }
       } catch (agentError) {
         console.error('Agent update error:', agentError);
       }
@@ -317,6 +337,7 @@ function frame(now) {
     }
     
     world.render();
+    labelRenderer.render(world.scene, world.camera);
   } catch (error) {
     if (!frameErrorLogged) {
       console.error('Frame loop error:', error);

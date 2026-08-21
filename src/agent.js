@@ -84,6 +84,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     mixer,
     actions,
     currentAction: null,
+    lastForageSource: null, // Track last forage source to encourage variety
+    lastBusyKind: null, // Track last busy kind to avoid immediate repetition
   };
 
   const hud = {
@@ -791,6 +793,15 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
 
   function finishBusy() {
     const b = state.busy;
+    
+    // Record last busy kind and forage source for variety
+    if (b) {
+      state.lastBusyKind = b.kind;
+      if (b.kind === 'forage' && b.source) {
+        state.lastForageSource = b.source;
+      }
+    }
+    
     state.busy = null;
     if (!b) return;
     if (b.kind === 'eat') {
@@ -931,9 +942,20 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       if (huntable && hasWeapon()) options.push({ type: 'hunt', item: huntable, dist: s.huntable.dist });
       if (tendable && s.hasPen && s.hasTrough) options.push({ type: 'tend', item: tendable, dist: s.tendable.dist });
       
-      // Choose closest option
+      // Sort by distance
       options.sort((a, b) => a.dist - b.dist);
-      const best = options[0];
+      
+      // Prefer variety: if last action was forage at the same source, try 2nd nearest forage
+      let best = options[0];
+      if (state.lastBusyKind === 'forage' && best && best.type === 'forage' && best.item === state.lastForageSource && options.length > 1) {
+        // Find next different forage source or different activity
+        for (let i = 1; i < options.length; i++) {
+          if (options[i].type !== 'forage' || options[i].item !== state.lastForageSource) {
+            best = options[i];
+            break;
+          }
+        }
+      }
       
       if (best) {
         if (best.type === 'forage') {
@@ -983,6 +1005,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
 
     if (actName === 'eat') {
+      // Discourage eating immediately after forage/combine unless actually hungry
+      const justForagedOrCombined = state.lastBusyKind === 'forage' || state.lastBusyKind === 'combine';
+      if (justForagedOrCombined && state.hunger >= 0.55) {
+        // Not hungry enough to eat immediately after gathering/inventing
+        brain.reinforce(-0.04);
+        return false;
+      }
+      
       const inv = bestInvFood();
       if (inv && state.hunger < 0.75) {
         startEat(inv, null);
@@ -1016,36 +1046,35 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       const forageOre = s.forageOre.item;
       const forageStone = s.forageStone.item;
       
-      // Find best option (pickup or forage)
-      let bestTarget = null;
-      let bestDist = Infinity;
-      let isForage = false;
+      // Find all options (pickup or forage)
+      const options = [];
       
-      if (n.item && n.dist < bestDist) {
-        bestTarget = n.item;
-        bestDist = n.dist;
-        isForage = false;
-      }
-      if (forageWood && s.forageWood.dist < bestDist) {
-        bestTarget = forageWood;
-        bestDist = s.forageWood.dist;
-        isForage = true;
-      }
-      if (forageOre && s.forageOre.dist < bestDist) {
-        bestTarget = forageOre;
-        bestDist = s.forageOre.dist;
-        isForage = true;
-      }
-      if (forageStone && s.forageStone.dist < bestDist) {
-        bestTarget = forageStone;
-        bestDist = s.forageStone.dist;
-        isForage = true;
-      }
+      if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
+      if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
+      if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true });
+      if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true });
       
-      if (!bestTarget) {
+      if (options.length === 0) {
         brain.reinforce(-0.03);
         return false;
       }
+      
+      // Sort by distance
+      options.sort((a, b) => a.dist - b.dist);
+      
+      // Prefer variety: avoid same forage source if just foraged there
+      let choice = options[0];
+      if (state.lastBusyKind === 'forage' && choice.isForage && choice.target === state.lastForageSource && options.length > 1) {
+        for (let i = 1; i < options.length; i++) {
+          if (!options[i].isForage || options[i].target !== state.lastForageSource) {
+            choice = options[i];
+            break;
+          }
+        }
+      }
+      
+      const bestTarget = choice.target;
+      const isForage = choice.isForage;
       
       const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
       const remain = walkToward(target.x, target.z, dt, speed);
@@ -1065,48 +1094,45 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         const forageFood = s.forageFood.item;
         const forageWater = s.forageWater.item;
         
-        let bestTarget = null;
-        let bestDist = Infinity;
-        let isForage = false;
+        // Build list of options
+        const options = [];
         
-        if (n.item && n.dist < bestDist) {
-          bestTarget = n.item;
-          bestDist = n.dist;
-          isForage = false;
-        }
-        if (forageWood && s.forageWood.dist < bestDist) {
-          bestTarget = forageWood;
-          bestDist = s.forageWood.dist;
-          isForage = true;
-        }
-        if (forageGrain && nearestForageSource(world, group.position, ['grain']).dist < bestDist) {
-          bestTarget = forageGrain;
-          bestDist = nearestForageSource(world, group.position, ['grain']).dist;
-          isForage = true;
-        }
-        if (forageFood && s.forageFood.dist < bestDist) {
-          bestTarget = forageFood;
-          bestDist = s.forageFood.dist;
-          isForage = true;
-        }
-        if (forageWater && s.forageWater.dist < bestDist) {
-          bestTarget = forageWater;
-          bestDist = s.forageWater.dist;
-          isForage = true;
+        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
+        if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
+        if (forageGrain) options.push({ target: forageGrain, dist: nearestForageSource(world, group.position, ['grain']).dist, isForage: true });
+        if (forageFood) options.push({ target: forageFood, dist: s.forageFood.dist, isForage: true });
+        if (forageWater) options.push({ target: forageWater, dist: s.forageWater.dist, isForage: true });
+        
+        if (options.length === 0) {
+          brain.reinforce(-0.04);
+          return false;
         }
         
-        if (bestTarget) {
-          const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
-          const remain = walkToward(target.x, target.z, dt, speed);
-          if (isForage) {
-            if (remain < FORAGE_RADIUS) startForage(bestTarget);
-          } else {
-            if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
+        // Sort by distance
+        options.sort((a, b) => a.dist - b.dist);
+        
+        // Prefer variety: avoid same forage source if just foraged there
+        let choice = options[0];
+        if (state.lastBusyKind === 'forage' && choice.isForage && choice.target === state.lastForageSource && options.length > 1) {
+          for (let i = 1; i < options.length; i++) {
+            if (!options[i].isForage || options[i].target !== state.lastForageSource) {
+              choice = options[i];
+              break;
+            }
           }
-          return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
         }
-        brain.reinforce(-0.04);
-        return false;
+        
+        const bestTarget = choice.target;
+        const isForage = choice.isForage;
+        
+        const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
+        const remain = walkToward(target.x, target.z, dt, speed);
+        if (isForage) {
+          if (remain < FORAGE_RADIUS) startForage(bestTarget);
+        } else {
+          if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
+        }
+        return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
       }
       const wb = nearestBuilding(world, group.position, 'workbench');
       const fire = nearestBuilding(world, group.position, 'fire');
@@ -1135,59 +1161,71 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         
         const n = nearestPickup(world, group.position, need.length ? need : MATERIAL_TYPES);
         
-        // Check forage sources for needed materials
-        let bestTarget = null;
-        let bestDist = Infinity;
-        let isForage = false;
+        // Build list of options
+        const options = [];
         
-        if (n.item && n.dist < bestDist) {
-          bestTarget = n.item;
-          bestDist = n.dist;
-          isForage = false;
-        }
+        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
         if (need.includes('wood') || need.length === 0) {
           const forageWood = s.forageWood.item;
-          if (forageWood && s.forageWood.dist < bestDist) {
-            bestTarget = forageWood;
-            bestDist = s.forageWood.dist;
-            isForage = true;
-          }
+          if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
         }
         if (need.includes('stone') || need.length === 0) {
           const forageStone = s.forageStone.item;
-          if (forageStone && s.forageStone.dist < bestDist) {
-            bestTarget = forageStone;
-            bestDist = s.forageStone.dist;
-            isForage = true;
-          }
+          if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true });
         }
         if (need.includes('ore') || need.length === 0) {
           const forageOre = s.forageOre.item;
-          if (forageOre && s.forageOre.dist < bestDist) {
-            bestTarget = forageOre;
-            bestDist = s.forageOre.dist;
-            isForage = true;
+          if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true });
+        }
+        
+        if (options.length === 0) {
+          brain.reinforce(-0.04);
+          return false;
+        }
+        
+        // Sort by distance
+        options.sort((a, b) => a.dist - b.dist);
+        
+        // Prefer variety: avoid same forage source if just foraged there
+        let choice = options[0];
+        if (state.lastBusyKind === 'forage' && choice.isForage && choice.target === state.lastForageSource && options.length > 1) {
+          for (let i = 1; i < options.length; i++) {
+            if (!options[i].isForage || options[i].target !== state.lastForageSource) {
+              choice = options[i];
+              break;
+            }
           }
         }
         
-        if (bestTarget) {
-          const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
-          const remain = walkToward(target.x, target.z, dt, speed);
-          if (isForage) {
-            if (remain < FORAGE_RADIUS) startForage(bestTarget);
-          } else {
-            if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
-          }
-          return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
+        const bestTarget = choice.target;
+        const isForage = choice.isForage;
+        
+        const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
+        const remain = walkToward(target.x, target.z, dt, speed);
+        if (isForage) {
+          if (remain < FORAGE_RADIUS) startForage(bestTarget);
+        } else {
+          if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
         }
-        brain.reinforce(-0.04);
-        return false;
+        return remain >= (isForage ? FORAGE_RADIUS : PICKUP_RADIUS);
       }
       startBuild(what);
       return false;
     }
 
     if (actName === 'combine') {
+      // Discourage instant combine after forage unless we have good reason
+      // (e.g., many diverse items, or enough time has passed)
+      const justForaged = state.lastBusyKind === 'forage';
+      const itemCount = Object.values(state.inventory).filter(c => c > 0).length;
+      
+      // If just foraged and only have 2-3 items, prefer to gather more first
+      if (justForaged && itemCount <= 3) {
+        // Skip combine and let next think cycle pick a different action
+        brain.reinforce(-0.02);
+        return false;
+      }
+      
       if (!canCombineAny()) {
         brain.reinforce(-0.03);
         return false;

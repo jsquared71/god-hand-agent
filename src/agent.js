@@ -42,6 +42,25 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
 
   const parts = group.userData.parts || {};
   const brain = new Brain(priors);
+  
+  // Setup animation mixer if clips are available
+  let mixer = null;
+  let currentAction = null;
+  const actions = {};
+  
+  if (group.userData.fromGltf && group.userData.animationClips) {
+    mixer = new THREE.AnimationMixer(group);
+    const clips = group.userData.animationClips;
+    
+    // Build actions for each available clip role
+    for (const [role, clipArray] of Object.entries(clips)) {
+      if (clipArray && clipArray.length > 0) {
+        const action = mixer.clipAction(clipArray[0]);
+        action.setLoop(THREE.LoopRepeat);
+        actions[role] = action;
+      }
+    }
+  }
 
   const state = {
     name,
@@ -62,6 +81,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     sluggish: false,
     wantBubble: 'Idle',
     notebook, // Reference to shared discovery notebook
+    mixer,
+    actions,
+    currentAction: null,
   };
 
   const hud = {
@@ -597,6 +619,51 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       }
     }
     
+    // If using animation mixer with clips, drive animation with mixer
+    if (state.mixer && Object.keys(state.actions).length > 0) {
+      state.mixer.update(dt);
+      
+      // Determine which clip to play based on state
+      let desiredAction = null;
+      
+      if (walking) {
+        desiredAction = 'walk';
+      } else if (state.busy) {
+        // Check if busy task is a "working" action
+        const workingTasks = ['eat', 'process', 'build', 'combine', 'forage', 'hunt', 'tend'];
+        if (workingTasks.includes(state.busy.kind)) {
+          desiredAction = 'work';
+        } else {
+          desiredAction = 'idle';
+        }
+      } else {
+        desiredAction = 'idle';
+      }
+      
+      // Fallback if desired action not available
+      if (!state.actions[desiredAction]) {
+        if (state.actions.idle) desiredAction = 'idle';
+        else if (state.actions.walk) desiredAction = 'walk';
+        else desiredAction = Object.keys(state.actions)[0];
+      }
+      
+      // Fade to new action if changed
+      if (desiredAction && state.currentAction !== desiredAction && state.actions[desiredAction]) {
+        const fadeTime = 0.15;
+        
+        if (state.currentAction && state.actions[state.currentAction]) {
+          state.actions[state.currentAction].fadeOut(fadeTime);
+        }
+        
+        const newAction = state.actions[desiredAction];
+        newAction.reset().fadeIn(fadeTime).play();
+        state.currentAction = desiredAction;
+      }
+      
+      return;
+    }
+    
+    // Procedural fallback animation (original code)
     if (!root) {
       group.position.y = walking
         ? Math.abs(Math.sin(state.walkPhase)) * 0.05

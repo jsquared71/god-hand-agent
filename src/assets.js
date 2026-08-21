@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { COLORS } from './recipes.js';
 
 const TARGET_SIZE = {
@@ -18,9 +19,9 @@ const TARGET_SIZE = {
   fish: 0.4,
   cooked_fish: 0.4,
   sticks: 0.45,
-  mushroom: 0.3,
-  fruit: 0.28,
-  herb: 0.25,
+  mushroom: 0.48,
+  fruit: 1.2,
+  herb: 0.55,
   meat: 0.38,
   egg: 0.25,
   milk: 0.35,
@@ -34,6 +35,10 @@ const TARGET_SIZE = {
   bed: 1.6,
   trough: 0.8,
   pen: 1.2,
+  tree: 3.6,
+  bush: 1.15,
+  rabbit: 0.55,
+  deer: 1.2,
 };
 
 function std(color, extra = {}) {
@@ -895,6 +900,77 @@ export class AssetLibrary {
 
   async preload(ids = Object.keys(PROCEDURAL)) {
     await Promise.all(ids.map((id) => this.load(id)));
+    await Promise.all([
+      this.tryLoad('tree'),
+      this.tryLoad('bush'),
+      this.tryLoad('mushroom'),
+      this.tryLoad('fruit'),
+      this.tryLoad('herb'),
+      this.tryLoad('rabbit'),
+      this.tryLoad('deer'),
+    ]);
+    
+    // Try loading agent animation clips if agent was loaded from GLB
+    const agentProto = this.cache.get('agent');
+    if (agentProto && agentProto.userData.fromGltf) {
+      await this.loadAgentAnimations();
+    }
+  }
+  
+  async loadAgentAnimations() {
+    const clips = {};
+    const companions = [
+      { name: 'idle', role: 'idle' },
+      { name: 'walk', role: 'walk' },
+      { name: 'work', role: 'work' },
+    ];
+    
+    for (const { name, role } of companions) {
+      const url = `/assets/glb/agent-${name}.glb`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const buf = await res.arrayBuffer();
+        const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
+        
+        if (gltf.animations && gltf.animations.length > 0) {
+          clips[role] = gltf.animations;
+        }
+      } catch {
+        // Soft fail - clip not available
+      }
+    }
+    
+    // Store clips on the agent proto
+    const agentProto = this.cache.get('agent');
+    if (agentProto) {
+      agentProto.userData.animationClips = clips;
+    }
+  }
+
+  async tryLoad(id) {
+    if (this.cache.has(id)) return this.cache.get(id);
+    const url = `/assets/glb/${id}.glb`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
+      const root = gltf.scene || gltf.scenes[0];
+      centerAndScale(root, id);
+      root.userData.fromGltf = true;
+      
+      // Store animations if present
+      if (gltf.animations && gltf.animations.length > 0) {
+        root.userData.clips = gltf.animations;
+      }
+      
+      this.cache.set(id, root);
+      this.source.set(id, 'glb');
+      return root;
+    } catch {
+      return null;
+    }
   }
 
   async load(id) {
@@ -908,6 +984,12 @@ export class AssetLibrary {
       const root = gltf.scene || gltf.scenes[0];
       centerAndScale(root, id);
       root.userData.fromGltf = true;
+      
+      // Store animations if present
+      if (gltf.animations && gltf.animations.length > 0) {
+        root.userData.clips = gltf.animations;
+      }
+      
       this.cache.set(id, root);
       this.source.set(id, 'glb');
       return root;
@@ -928,7 +1010,25 @@ export class AssetLibrary {
       const fresh = fn();
       return ghost ? ghostify(fresh) : fresh;
     }
-    const clone = proto.clone(true);
+    
+    // Use SkeletonUtils.clone for skinned meshes to avoid shared skeletons
+    let clone;
+    const needsSkeletonClone = proto.userData.fromGltf && this.hasSkinningOrBones(proto);
+    
+    if (needsSkeletonClone) {
+      clone = skeletonClone(proto);
+    } else {
+      clone = proto.clone(true);
+    }
+    
+    // Copy userData
+    clone.userData.fromGltf = !!proto.userData.fromGltf;
+    
+    // For agent: attach animation clips and setup for mixer
+    if (id === 'agent' && proto.userData.animationClips) {
+      clone.userData.animationClips = proto.userData.animationClips;
+    }
+    
     if (proto.userData.parts && !proto.userData.fromGltf) {
       clone.userData.parts = {
         root: clone.getObjectByName('root'),
@@ -941,8 +1041,18 @@ export class AssetLibrary {
         tool: clone.getObjectByName('heldTool'),
       };
     }
-    clone.userData.fromGltf = !!proto.userData.fromGltf;
+    
     return ghost ? ghostify(clone) : clone;
+  }
+  
+  hasSkinningOrBones(obj) {
+    let hasSkin = false;
+    obj.traverse((child) => {
+      if (child.isSkinnedMesh || child.isBone) {
+        hasSkin = true;
+      }
+    });
+    return hasSkin;
   }
 
   usingGlb(id) {

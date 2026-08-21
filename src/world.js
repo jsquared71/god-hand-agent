@@ -681,6 +681,66 @@ function createBiomes(scene, seed = Date.now()) {
   return { fauna, forageSources, seed };
 }
 
+export function dressWorld(world, assets) {
+  const forageTypeMap = {
+    tree: 'tree',
+    berry: 'bush',
+    grain: 'grain',
+    mushroom: 'mushroom',
+    fruit_bush: 'fruit',
+    herb_patch: 'herb',
+    fish: 'fish',
+  };
+  
+  const faunaBiomeMap = {
+    meadow: 'rabbit',
+    forest: 'deer',
+    water: 'fish',
+  };
+  
+  for (const forage of world.forageSources) {
+    const glbId = forageTypeMap[forage.type];
+    if (glbId && assets.usingGlb(glbId)) {
+      const oldMesh = forage.mesh;
+      const pos = oldMesh.position.clone();
+      const yaw = oldMesh.rotation.y;
+      
+      world.scene.remove(oldMesh);
+      
+      const newMesh = assets.create(glbId);
+      newMesh.position.copy(pos);
+      newMesh.rotation.y = yaw;
+      world.scene.add(newMesh);
+      
+      forage.mesh = newMesh;
+      
+      if (forage.fauna) {
+        forage.fauna.mesh = newMesh;
+      }
+    }
+  }
+  
+  for (const animal of world.fauna) {
+    const glbId = faunaBiomeMap[animal.biome];
+    if (glbId && assets.usingGlb(glbId)) {
+      const oldMesh = animal.mesh;
+      const pos = oldMesh.position.clone();
+      const dx = Math.cos(animal.dir);
+      const dz = Math.sin(animal.dir);
+      const yaw = Math.atan2(dx, dz) - Math.PI / 2;
+      
+      world.scene.remove(oldMesh);
+      
+      const newMesh = assets.create(glbId);
+      newMesh.position.copy(pos);
+      newMesh.rotation.y = yaw;
+      world.scene.add(newMesh);
+      
+      animal.mesh = newMesh;
+    }
+  }
+}
+
 export function createWorld(canvas, seed = null) {
   // Generate or use provided seed
   const worldSeed = seed ?? Date.now();

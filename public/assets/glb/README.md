@@ -4,11 +4,36 @@ Put exported GLBs here. The game looks up `/assets/glb/<id>.glb`. If a file is m
 
 ## Filenames
 
+### Flora (low poly)
+
+| File | Subject |
+|---|---|
+| `tree.glb` | Tree (forest scenery) |
+| `bush.glb` | Berry bush (forage source) |
+| `grain.glb` | Grain sheaf |
+| `mushroom.glb` | Mushroom cluster |
+| `fruit.glb` | Fruit bush |
+| `herb.glb` | Herb patch |
+
+### Fauna (higher poly)
+
+| File | Subject |
+|---|---|
+| `rabbit.glb` | Rabbit (meadow) |
+| `deer.glb` | Deer (forest) |
+| `fish.glb` | Fish (water) |
+
+### Settler
+
 | File | Subject |
 |---|---|
 | `agent.glb` | The humanoid agent |
+
+### Legacy pickups & buildings
+
+| File | Subject |
+|---|---|
 | `berry.glb` | Berry cluster |
-| `grain.glb` | Grain sheaf |
 | `wood.glb` | Log |
 | `stone.glb` | Stone chunk |
 | `ore.glb` | Ore rock |

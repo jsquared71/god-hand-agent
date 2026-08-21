@@ -891,6 +891,82 @@ function ghostify(root) {
   return root;
 }
 
+function recolorAgentTexture(originalTexture) {
+  // Recolor Meshy agent texture: lime/yellow → teal, orange → tan
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Get image from texture
+  const img = originalTexture.image;
+  canvas.width = img.width;
+  canvas.height = img.height;
+  
+  // Draw original
+  ctx.drawImage(img, 0, 0);
+  
+  // Get pixel data
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  // Target colors: teal (62,138,128), tan (198,154,98)
+  const teal = { r: 62, g: 138, b: 128 };
+  const tan = { r: 198, g: 154, b: 98 };
+  
+  // Recolor: lime/yellow → teal, orange → tan
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    
+    // Calculate brightness to preserve lighting
+    const brightness = Math.max(r, g, b);
+    
+    // Keep very dark areas unchanged (shadows, AO)
+    if (brightness < 40) continue;
+    
+    // Detect lime/yellow (high green, decent red, low blue)
+    const isLimeYellow = g > b + 20 && g > 100 && r > 60;
+    
+    // Detect orange (high red, medium-high green, low blue)
+    const isOrange = r > g && r > b + 30 && g > 70 && r > 120;
+    
+    if (isLimeYellow) {
+      // Lime/yellow → teal - preserve brightness ratio
+      const brightnessRatio = brightness / 255;
+      const targetBrightness = Math.max(teal.r, teal.g, teal.b);
+      const scale = (brightness / targetBrightness) * 1.2; // 1.2x boost to compensate
+      
+      data[i] = Math.min(255, teal.r * scale);
+      data[i + 1] = Math.min(255, teal.g * scale);
+      data[i + 2] = Math.min(255, teal.b * scale);
+    } else if (isOrange) {
+      // Orange → tan - preserve brightness ratio
+      const brightnessRatio = brightness / 255;
+      const targetBrightness = Math.max(tan.r, tan.g, tan.b);
+      const scale = (brightness / targetBrightness) * 1.1; // 1.1x boost
+      
+      data[i] = Math.min(255, tan.r * scale);
+      data[i + 1] = Math.min(255, tan.g * scale);
+      data[i + 2] = Math.min(255, tan.b * scale);
+    }
+  }
+  
+  // Put recolored data back
+  ctx.putImageData(imageData, 0, 0);
+  
+  // Create new texture from canvas
+  const newTexture = new THREE.CanvasTexture(canvas);
+  newTexture.colorSpace = originalTexture.colorSpace;
+  newTexture.wrapS = originalTexture.wrapS;
+  newTexture.wrapT = originalTexture.wrapT;
+  newTexture.magFilter = originalTexture.magFilter;
+  newTexture.minFilter = originalTexture.minFilter;
+  newTexture.flipY = originalTexture.flipY;
+  newTexture.needsUpdate = true;
+  
+  return newTexture;
+}
+
 export class AssetLibrary {
   constructor() {
     this.loader = new GLTFLoader();
@@ -978,10 +1054,33 @@ export class AssetLibrary {
           wrapper.position.y -= box2.min.y;
         }
         
+        // Fix agent materials: remove emissive and recolor albedo
         wrapper.traverse((o) => {
           if (o.isMesh) {
             o.castShadow = true;
             o.receiveShadow = true;
+            
+            if (o.material) {
+              const mat = o.material;
+              
+              // 1. Zero emissive (was [1,1,1] making it full-bright neon)
+              if (mat.emissive) {
+                mat.emissive.setRGB(0, 0, 0);
+              }
+              mat.emissiveIntensity = 0;
+              
+              // 2. Drop emissiveMap (was same atlas as baseColor)
+              if (mat.emissiveMap) {
+                mat.emissiveMap = null;
+              }
+              
+              // 3. Recolor albedo map: lime/yellow → teal, orange → tan
+              if (mat.map) {
+                const recoloredMap = recolorAgentTexture(mat.map);
+                mat.map = recoloredMap;
+                mat.needsUpdate = true;
+              }
+            }
           }
         });
         
@@ -1113,6 +1212,32 @@ export class AssetLibrary {
     // For agent: attach animation clips and setup for mixer
     if (id === 'agent' && proto.userData.animationClips) {
       clone.userData.animationClips = proto.userData.animationClips;
+      
+      // Fix agent materials AFTER cloning: remove emissive and recolor albedo
+      clone.traverse((o) => {
+        if (o.isMesh && o.material) {
+          const mat = o.material;
+          
+          // 1. Zero emissive (was [1,1,1] making it full-bright neon)
+          if (mat.emissive) {
+            mat.emissive.setRGB(0, 0, 0);
+          }
+          mat.emissiveIntensity = 0;
+          
+          // 2. Drop emissiveMap (was same atlas as baseColor)
+          if (mat.emissiveMap) {
+            mat.emissiveMap = null;
+          }
+          
+          // 3. Recolor albedo map: lime/yellow → teal, orange → tan
+          if (mat.map && !mat.userData.recolored) {
+            const recoloredMap = recolorAgentTexture(mat.map);
+            mat.map = recoloredMap;
+            mat.userData.recolored = true;
+            mat.needsUpdate = true;
+          }
+        }
+      });
     }
     
     if (proto.userData.parts && !proto.userData.fromGltf) {

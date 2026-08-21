@@ -18,9 +18,9 @@ const TARGET_SIZE = {
   fish: 0.4,
   cooked_fish: 0.4,
   sticks: 0.45,
-  mushroom: 0.3,
-  fruit: 0.28,
-  herb: 0.25,
+  mushroom: 0.48,
+  fruit: 1.2,
+  herb: 0.55,
   meat: 0.38,
   egg: 0.25,
   milk: 0.35,
@@ -34,6 +34,10 @@ const TARGET_SIZE = {
   bed: 1.6,
   trough: 0.8,
   pen: 1.2,
+  tree: 3.6,
+  bush: 1.15,
+  rabbit: 0.55,
+  deer: 1.2,
 };
 
 function std(color, extra = {}) {
@@ -895,6 +899,34 @@ export class AssetLibrary {
 
   async preload(ids = Object.keys(PROCEDURAL)) {
     await Promise.all(ids.map((id) => this.load(id)));
+    await Promise.all([
+      this.tryLoad('tree'),
+      this.tryLoad('bush'),
+      this.tryLoad('mushroom'),
+      this.tryLoad('fruit'),
+      this.tryLoad('herb'),
+      this.tryLoad('rabbit'),
+      this.tryLoad('deer'),
+    ]);
+  }
+
+  async tryLoad(id) {
+    if (this.cache.has(id)) return this.cache.get(id);
+    const url = `/assets/glb/${id}.glb`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
+      const root = gltf.scene || gltf.scenes[0];
+      centerAndScale(root, id);
+      root.userData.fromGltf = true;
+      this.cache.set(id, root);
+      this.source.set(id, 'glb');
+      return root;
+    } catch {
+      return null;
+    }
   }
 
   async load(id) {

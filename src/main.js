@@ -1,4 +1,4 @@
-import { createWorld } from './world.js';
+import { createWorld, dressWorld } from './world.js';
 import { setupControls } from './controls.js';
 import { setupDrop } from './drop.js';
 import { setupToolbar } from './toolbar.js';
@@ -28,6 +28,8 @@ const cam = setupControls(world);
 const assets = new AssetLibrary();
 
 await assets.preload();
+
+dressWorld(world, assets);
 
 // Store assets in world for well water spawning
 world.userData = { assets };

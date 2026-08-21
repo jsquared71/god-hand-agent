@@ -70,6 +70,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
     wanderlust: 0.0, // Place-novelty drive (0 = content, 1 = restless)
     comfort: 0.7, // Shelter/warmth drive (1 = settled, 0 = miserable)
+    social: 0.55, // Companionship drive (1 = content, 0 = lonely)
     inventory: emptyInventory(),
     hasTools: false,
     bestGatherMult: 1.0,
@@ -100,7 +101,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     itchBoostTimer: 0, // Timer for 1.5× itch gain after process/combine that didn't yield tag
     wanderTargetBiome: null, // Committed biome when wanderlust is high
     wanderTargetSourceKey: null, // Small key for wander target (harvestType for re-resolve)
-    driveCommit: null, // Current committed drive (null, 'hunger', 'health', 'comfort', 'wanderlust', 'itch', 'mood', 'brain')
+    driveCommit: null, // Current committed drive (null, 'hunger', 'health', 'comfort', 'wanderlust', 'itch', 'mood', 'social', 'brain')
     driveCommitT: 0, // Time remaining on drive commitment (seconds)
   };
 
@@ -118,6 +119,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     itchTag: document.getElementById(`${name.toLowerCase()}-itch-tag`),
     comfortFill: document.getElementById(`${name.toLowerCase()}-comfort-fill`),
     comfortVal: document.getElementById(`${name.toLowerCase()}-comfort-val`),
+    socialFill: document.getElementById(`${name.toLowerCase()}-social-fill`),
+    socialVal: document.getElementById(`${name.toLowerCase()}-social-val`),
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
@@ -316,6 +319,50 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Apply comfort change and clamp
     state.comfort = Math.max(0, Math.min(1, state.comfort + comfortChange));
+  }
+
+  
+  function updateSocial(dt) {
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const distToOther = distanceToNearestAgent();
+    const nearHut = hutNear();
+    const nearFire = !!fireNear();
+    const sheltered = nearHut || nearFire;
+    
+    let socialChange = 0;
+    
+    // Recover when close to the other settler
+    if (distToOther < 2.5) {
+      // Base recovery rate when near
+      socialChange = 0.035 * dt;
+      
+      // Bonus when both near and sheltered (company at camp)
+      if (sheltered) {
+        socialChange += 0.02 * dt;
+      }
+    } else {
+      // Drain while apart
+      let drainRate = 0.015 * dt; // Base drain by day
+      
+      // Check if committed to wanderlust and walking far
+      const isWandering = state.driveCommit === 'wanderlust' && state.wanderlust > 0.6;
+      
+      if (isNight && !sheltered) {
+        // Night alone in the open: lonely + cold = faster drain
+        drainRate = 0.035 * dt;
+      } else if (isNight) {
+        // Night but sheltered: moderate drain
+        drainRate = 0.022 * dt;
+      } else if (isWandering) {
+        // Wandering during the day: small drain (exploration is okay)
+        drainRate = 0.008 * dt;
+      }
+      
+      socialChange = -drainRate;
+    }
+    
+    // Apply social change and clamp
+    state.social = Math.max(0, Math.min(1, state.social + socialChange));
   }
 
   
@@ -520,6 +567,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       wanderlust: 0,
       itch: 0,
       mood: 0,
+      social: 0,
       brain: 0.25,
     };
     
@@ -575,6 +623,16 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       if (boredom > 0.65) {
         scores.mood = Math.pow(boredom, 1.5) * 0.7;
       }
+    }
+    
+    // Social: only when body is okay
+    if (state.hunger >= 0.45 && state.health >= 0.4 && !(isNight && state.comfort < 0.55)) {
+      const loneliness = 1 - state.social;
+      scores.social = Math.pow(loneliness, 1.3) * 0.75;
+    } else if (state.hunger >= 0.45 && state.health >= 0.4 && isNight && state.comfort >= 0.55) {
+      // At night but comfortable (at hut/fire): social can still count
+      const loneliness = 1 - state.social;
+      scores.social = Math.pow(loneliness, 1.3) * 0.75;
     }
     
     return scores;
@@ -653,6 +711,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           name = filtered[Math.floor(Math.random() * filtered.length)];
           action = ACTION_NAMES.indexOf(name);
         }
+      }
+    } else if (winner === 'social') {
+      // Remap idle/eat/combine/process/seek_food to idle (will walk to other agent in act())
+      if (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process' || name === 'seek_food') {
+        name = 'idle';
+        action = ACTION_NAMES.indexOf('idle');
       }
     }
     
@@ -842,6 +906,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       state.wantBubble = 'Itch';
     } else if (state.driveCommit === 'mood') {
       state.wantBubble = 'Bored';
+    } else if (state.driveCommit === 'social') {
+      state.wantBubble = 'Lonely';
     } else if (state.hunger <= 0.3) {
       state.wantBubble = 'Hungry';
     } else if ((isNight && state.comfort < 0.55) || state.comfort < 0.4) {
@@ -1674,6 +1740,35 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
       }
       
+      // Check if we should walk toward the other settler for social
+      if (state.driveCommit === 'social' && world.agents && world.agents.length > 1) {
+        const distToOther = distanceToNearestAgent();
+        
+        // Walk toward the other settler if not already close
+        if (distToOther > 1.3) {
+          // Find the other agent
+          let otherAgent = null;
+          for (const other of world.agents) {
+            if (other.group !== group) {
+              otherAgent = other;
+              break;
+            }
+          }
+          
+          if (otherAgent) {
+            // Use getSideSlotTarget to maintain personal space
+            const target = getSideSlotTarget(otherAgent.group.position.x, otherAgent.group.position.z);
+            const remain = walkToward(target.x, target.z, dt, speed);
+            
+            // Stop at personal space (~1.1-1.4 XZ)
+            if (remain < 1.4) {
+              return false; // Arrived, linger
+            }
+            return true; // Still walking
+          }
+        }
+      }
+      
       return false;
     }
 
@@ -2063,6 +2158,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const w = Math.round(state.wanderlust * 100);
     const i = Math.round(state.itch * 100);
     const c = Math.round(state.comfort * 100);
+    const so = Math.round(state.social * 100);
     if (hud.hungerFill) hud.hungerFill.style.width = `${h}%`;
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
@@ -2084,6 +2180,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     if (hud.comfortFill) hud.comfortFill.style.width = `${c}%`;
     if (hud.comfortVal) hud.comfortVal.textContent = `${c}%`;
+    
+    if (hud.socialFill) hud.socialFill.style.width = `${so}%`;
+    if (hud.socialVal) hud.socialVal.textContent = `${so}%`;
     
     // Update this agent's mind status
     if (hud.action) {
@@ -2314,6 +2413,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Comfort updates
     updateComfort(dt);
+    
+    // Social updates
+    updateSocial(dt);
     
     // Drive commitment timer
     if (state.driveCommitT > 0) {

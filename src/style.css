@@ -146,6 +146,10 @@ body::after {
   background: linear-gradient(90deg, #a84832, #e8976f);
 }
 
+.bar-fill.social {
+  background: linear-gradient(90deg, #5a6ba8, #8fa3d8);
+}
+
 .bar-fill.favor {
   background: linear-gradient(90deg, #8a5a12, var(--accent));
 }

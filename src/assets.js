@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { COLORS } from './recipes.js';
 
 const TARGET_SIZE = {
@@ -1016,7 +1016,7 @@ export class AssetLibrary {
     const needsSkeletonClone = proto.userData.fromGltf && this.hasSkinningOrBones(proto);
     
     if (needsSkeletonClone) {
-      clone = skeletonClone(proto);
+      clone = SkeletonUtils.clone(proto);
     } else {
       clone = proto.clone(true);
     }

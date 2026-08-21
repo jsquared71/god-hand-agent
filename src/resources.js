@@ -275,7 +275,10 @@ export function updateWorldItems(world, dt) {
   // Animate fauna
   if (world.fauna) {
     for (const creature of world.fauna) {
-      creature.hopPhase += dt * 4;
+      // Update mixer if present
+      if (creature.mesh.userData.mixer) {
+        creature.mesh.userData.mixer.update(dt);
+      }
       
       // Update Y position for terrain following
       const groundY = world.heightAt ? world.heightAt(creature.mesh.position.x, creature.mesh.position.z) : 0;
@@ -283,10 +286,10 @@ export function updateWorldItems(world, dt) {
       if (creature.swimPhase !== undefined) {
         // Fish: swim at water surface with gentle bob
         creature.swimPhase += dt * 3;
-        creature.mesh.position.y = POND_SPEC.surfaceY + 0.08 + Math.sin(creature.swimPhase) * 0.04;
+        creature.mesh.position.y = POND_SPEC.surfaceY + Math.sin(creature.swimPhase) * 0.03;
       } else {
-        // Land animals: hop on the ground
-        creature.mesh.position.y = groundY + Math.abs(Math.sin(creature.hopPhase)) * 0.08;
+        // Land animals: only terrain follow, no hop bob (skeletal clip handles it)
+        creature.mesh.position.y = groundY;
       }
       
       // Domestic animals produce resources periodically
@@ -349,16 +352,8 @@ export function updateWorldItems(world, dt) {
         
         // Orient mesh to face movement direction only when actually moving
         if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
-          // Check if this creature is using a GLB model
-          const isGlb = creature.mesh.userData?.fromGltf || false;
-          
-          if (isGlb) {
-            // GLB models (rabbit, deer, fish) face +Z, so no offset needed
-            creature.mesh.rotation.y = Math.atan2(dx, dz);
-          } else {
-            // Procedural models face +X, so offset by -π/2
-            creature.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
-          }
+          // GLB models face +Z, no offset needed
+          creature.mesh.rotation.y = Math.atan2(dx, dz);
         }
       } else {
         creature.dir += Math.PI;

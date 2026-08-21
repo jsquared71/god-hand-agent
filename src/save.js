@@ -29,6 +29,7 @@ export function serializeWorld(world, agents, camera, gameState, notebook = null
       facing: agent.state.facing,
       hunger: agent.state.hunger,
       energy: agent.state.energy,
+      health: agent.state.health || 1.0,
       entertainment: agent.state.entertainment,
       wanderlust: agent.state.wanderlust || 0,
       itch: agent.state.itch || 0.25,
@@ -123,6 +124,7 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
     agent.state.facing = agentData.facing ?? 0;
     agent.state.hunger = agentData.hunger ?? 0.62;
     agent.state.energy = agentData.energy ?? 1;
+    agent.state.health = agentData.health ?? 1.0;
     agent.state.entertainment = agentData.entertainment ?? 1.0;
     agent.state.wanderlust = agentData.wanderlust ?? 0.5;
     agent.state.itch = agentData.itch ?? 0.25;

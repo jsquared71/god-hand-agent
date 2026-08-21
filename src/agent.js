@@ -66,6 +66,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     name,
     hunger: 0.62,
     energy: 1,
+    health: 1.0, // Health stat (1 = full health, 0 = critical)
     entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
     wanderlust: 0.0, // Place-novelty drive (0 = content, 1 = restless)
     inventory: emptyInventory(),
@@ -1113,6 +1114,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       
       state.hunger = Math.min(1, state.hunger + rec.hunger);
       state.energy = Math.min(1, state.energy + rec.energy);
+      // Eating also restores some health
+      state.health = Math.min(1, state.health + rec.hunger * 0.2);
       if (b.fromWorldItem && world.pickups.includes(b.fromWorldItem)) {
         removePickup(world, b.fromWorldItem);
       } else {
@@ -1707,6 +1710,40 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else {
       state.sluggish = false;
       state.energy = Math.min(1, state.energy + 0.015 * dt);
+    }
+    
+    // Health updates
+    let healthDrain = 0;
+    let healthRegen = 0;
+    
+    // Drain health when starving
+    if (state.hunger < 0.1) {
+      healthDrain += 0.02 * dt;
+    }
+    
+    // Drain health when very low energy
+    if (state.energy < 0.2) {
+      healthDrain += 0.015 * dt;
+    }
+    
+    // Drain health at night if not near hut or fire
+    if (isNight && !isProtected) {
+      healthDrain += 0.018 * dt;
+    }
+    
+    // Recover health when conditions are good
+    if (state.hunger > 0.4 && isProtected) {
+      healthRegen += 0.04 * dt;
+    } else if (state.hunger > 0.4 && nearFire) {
+      healthRegen += 0.03 * dt;
+    }
+    
+    // Apply health changes
+    state.health = Math.max(0, Math.min(1, state.health - healthDrain + healthRegen));
+    
+    // Make agent sluggish when health is low
+    if (state.health < 0.25) {
+      state.sluggish = true;
     }
     
     // Entertainment updates

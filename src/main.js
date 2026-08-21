@@ -324,7 +324,8 @@ function updateFavor(dt) {
     const skyWeatherEl = document.getElementById('sky-weather');
     if (skyWeatherEl) {
       const weatherText = world.weather.current.charAt(0).toUpperCase() + world.weather.current.slice(1);
-      skyWeatherEl.textContent = weatherText;
+      const temp = world.weather.temperature ?? 60;
+      skyWeatherEl.textContent = `${weatherText} · ${temp}°`;
     }
   }
 }

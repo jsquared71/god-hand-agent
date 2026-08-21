@@ -100,6 +100,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     itchBoostTimer: 0, // Timer for 1.5× itch gain after process/combine that didn't yield tag
     wanderTargetBiome: null, // Committed biome when wanderlust is high
     wanderTargetSourceKey: null, // Small key for wander target (harvestType for re-resolve)
+    driveCommit: null, // Current committed drive (null, 'hunger', 'health', 'comfort', 'wanderlust', 'itch', 'mood', 'brain')
+    driveCommitT: 0, // Time remaining on drive commitment (seconds)
   };
 
   const hud = {
@@ -505,6 +507,158 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     };
   }
 
+  function pickDrive(s) {
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const hasHutOrFire = s.hasHut || world.buildings.some((b) => b.type === 'fire');
+    const hasHerbOrMushroom = (state.inventory.herb || 0) > 0 || (state.inventory.mushroom || 0) > 0;
+    const canGatherMedicine = s.forageFood.item && (s.forageFood.item.harvestType === 'herb' || s.forageFood.item.harvestType === 'mushroom');
+    
+    const scores = {
+      hunger: 0,
+      health: 0,
+      comfort: 0,
+      wanderlust: 0,
+      itch: 0,
+      mood: 0,
+      brain: 0.25,
+    };
+    
+    // Hunger: high when hunger is low, zero at 0.75+
+    if (state.hunger < 0.75) {
+      const normalized = 1 - (state.hunger / 0.75);
+      scores.hunger = Math.pow(normalized, 1.5);
+    }
+    
+    // Health: high when health is low, especially if medicine/herbs available
+    if (state.health < 0.5) {
+      const normalized = 1 - (state.health / 0.5);
+      let healthScore = Math.pow(normalized, 1.3);
+      
+      if (state.health < 0.25) {
+        healthScore = Math.max(healthScore, 0.95);
+      }
+      
+      if (hasAnyMedicine(s) || hasHerbOrMushroom || canGatherMedicine) {
+        healthScore *= 1.3;
+      }
+      
+      scores.health = Math.min(1, healthScore);
+    }
+    
+    // Comfort: high at night when low, near zero by day unless abysmal
+    if (isNight && state.comfort < 0.55) {
+      const normalized = 1 - (state.comfort / 0.55);
+      scores.comfort = Math.pow(normalized, 1.2) * 0.95;
+    } else if (state.comfort < 0.4) {
+      const normalized = 1 - (state.comfort / 0.4);
+      scores.comfort = Math.pow(normalized, 1.4) * 0.75;
+    }
+    
+    // Comfort must beat wanderlust at night if hut/fire exists
+    if (isNight && hasHutOrFire && state.comfort < 0.55) {
+      scores.comfort = Math.max(scores.comfort, 0.85);
+    }
+    
+    // Wanderlust: only counts when fed and (day or comfortable)
+    if (state.hunger >= 0.5 && ((!isNight) || state.comfort >= 0.55)) {
+      scores.wanderlust = state.wanderlust * 0.85;
+    }
+    
+    // Itch: only when body is okay
+    if (state.hunger >= 0.45 && state.health >= 0.4 && !(isNight && state.comfort < 0.55)) {
+      scores.itch = state.itch * 0.8;
+    }
+    
+    // Mood (boredom): only when body is okay
+    const boredom = 1 - state.entertainment;
+    if (state.hunger >= 0.45 && state.health >= 0.4 && !(isNight && state.comfort < 0.55)) {
+      if (boredom > 0.65) {
+        scores.mood = Math.pow(boredom, 1.5) * 0.7;
+      }
+    }
+    
+    return scores;
+  }
+  
+  function applyDrive(winner, s, brainAction, brainName) {
+    let action = brainAction;
+    let name = brainName;
+    
+    if (winner === 'hunger') {
+      if (name === 'eat' || hasAnyFood(s)) {
+        name = 'seek_food';
+        action = ACTION_NAMES.indexOf('seek_food');
+      }
+    } else if (winner === 'health') {
+      if (hasAnyMedicine(s)) {
+        name = 'use_medicine';
+        action = 0;
+      } else {
+        const hasHerbOrMushroom = (state.inventory.herb || 0) > 0 || (state.inventory.mushroom || 0) > 0;
+        const canGatherHerb = s.forageFood.item && s.forageFood.item.harvestType === 'herb';
+        const canGatherMushroom = s.forageFood.item && s.forageFood.item.harvestType === 'mushroom';
+        
+        if (hasHerbOrMushroom && canCombineAny()) {
+          name = 'combine';
+          action = ACTION_NAMES.indexOf('combine');
+        } else if (canGatherHerb || canGatherMushroom) {
+          name = 'seek_food';
+          action = ACTION_NAMES.indexOf('seek_food');
+        }
+      }
+    } else if (winner === 'comfort') {
+      name = 'idle';
+      action = ACTION_NAMES.indexOf('idle');
+    } else if (winner === 'wanderlust') {
+      const isIdleAction = (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process');
+      if (isIdleAction || (name === 'seek_food' && (state.inventory.berry || 0) > 0)) {
+        const hasForageTargets = s.forageFood.item || s.forageWood.item || s.forageOre.item || s.forageStone.item;
+        if (hasForageTargets) {
+          if (s.forageFood.item) {
+            name = 'seek_food';
+            action = ACTION_NAMES.indexOf('seek_food');
+          } else {
+            name = 'seek_material';
+            action = ACTION_NAMES.indexOf('seek_material');
+          }
+        }
+      }
+    } else if (winner === 'itch') {
+      const canSeekMaterial = (s.wood.item || s.forageWood.item || s.ore.item || s.forageOre.item || s.stone.item || s.forageStone.item);
+      const alternatives = [];
+      
+      if (canSeekMaterial) alternatives.push('seek_material');
+      if (canProcessAny()) alternatives.push('process');
+      if (canCombineAny()) alternatives.push('combine');
+      
+      if (alternatives.length > 0 && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
+        name = alternatives[Math.floor(Math.random() * alternatives.length)];
+        action = ACTION_NAMES.indexOf(name);
+      }
+    } else if (winner === 'mood') {
+      const isBoring = 
+        (name === 'eat' && state.lastBusyKind === 'eat') ||
+        (name === 'seek_food' && state.lastBusyKind === 'forage') ||
+        (name === 'combine' && !canCombineAny());
+      
+      if (isBoring) {
+        const alternatives = [];
+        if (canProcessAny()) alternatives.push('process');
+        if (nextBuild()) alternatives.push('build');
+        if (canCombineAny()) alternatives.push('combine');
+        alternatives.push('seek_material');
+        
+        const filtered = alternatives.filter(a => a !== state.lastBusyKind);
+        if (filtered.length > 0) {
+          name = filtered[Math.floor(Math.random() * filtered.length)];
+          action = ACTION_NAMES.indexOf(name);
+        }
+      }
+    }
+    
+    return { action, name };
+  }
+
   function think() {
     const s = snap();
     const emptyInv = inventoryEmpty(state.inventory);
@@ -585,110 +739,60 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
 
     let { action, name } = brain.act(input);
     
-    // Remap eat to seek_material if already full
+    // Satiety constraint: never eat if already full
     if (name === 'eat' && state.hunger >= 0.75) {
       name = 'seek_material';
       action = ACTION_NAMES.indexOf('seek_material');
     }
     
-    // Wanderlust-based behavior modification: move to other biome when restless
-    if (state.wanderlust > 0.6 && state.hunger >= 0.55) {
-      // Not hungry enough to force eating, and wanderlust is high
-      const isIdleAction = (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process');
+    // Compute urgency scores for all drives
+    const scores = pickDrive(s);
+    
+    // Find winner: argmax with hysteresis
+    let winner = 'brain';
+    let maxScore = scores.brain;
+    
+    for (const [drive, score] of Object.entries(scores)) {
+      if (drive === state.driveCommit) {
+        if (score + 0.08 > maxScore) {
+          winner = drive;
+          maxScore = score + 0.08;
+        }
+      } else if (score > maxScore) {
+        winner = drive;
+        maxScore = score;
+      }
+    }
+    
+    // Survive drives can override commit
+    if (state.driveCommit && state.driveCommit !== winner && state.driveCommitT > 0) {
+      const surviveWinner = ['hunger', 'health'];
+      const surviveCommit = ['hunger', 'health', 'comfort'];
       
-      if (isIdleAction || (name === 'seek_food' && (state.inventory.berry || 0) > 0)) {
-        // Remap to seeking in the target biome
-        const hasForageTargets = s.forageFood.item || s.forageWood.item || s.forageOre.item || s.forageStone.item;
-        if (hasForageTargets) {
-          // Pick seek_food or seek_material based on what's available
-          if (s.forageFood.item) {
-            name = 'seek_food';
-            action = ACTION_NAMES.indexOf('seek_food');
-          } else {
-            name = 'seek_material';
-            action = ACTION_NAMES.indexOf('seek_material');
-          }
+      // If new winner is hunger/health and score >= committed, always switch
+      if (surviveWinner.includes(winner) && scores[winner] >= scores[state.driveCommit]) {
+        winner = winner;
+      }
+      // If committed is survive and new winner is not hunger/health, require +0.2 to break
+      else if (surviveCommit.includes(state.driveCommit) && !surviveWinner.includes(winner)) {
+        if (scores[winner] > scores[state.driveCommit] + 0.2) {
+          winner = winner;
+        } else {
+          winner = state.driveCommit;
         }
       }
     }
     
-    // Entertainment-based behavior modification: prefer variety when bored
-    if (state.entertainment < 0.35) {
-      const isBoring = 
-        (name === 'eat' && state.lastBusyKind === 'eat') ||
-        (name === 'seek_food' && state.lastBusyKind === 'forage') ||
-        (name === 'combine' && !canCombineAny()); // Can't invent anything new
-      
-      if (isBoring) {
-        // Prefer variety: switch to different activity
-        const alternatives = [];
-        if (canProcessAny()) alternatives.push('process');
-        if (nextBuild()) alternatives.push('build');
-        if (canCombineAny()) alternatives.push('combine');
-        // Always have seek_material as fallback
-        alternatives.push('seek_material');
-        
-        // Pick a random alternative that's not the same as last
-        const filtered = alternatives.filter(a => a !== state.lastBusyKind);
-        if (filtered.length > 0) {
-          name = filtered[Math.floor(Math.random() * filtered.length)];
-          action = ACTION_NAMES.indexOf(name);
-        }
-      }
+    // Commit to winner for 6-10 seconds
+    if (state.driveCommit !== winner || state.driveCommitT <= 0) {
+      state.driveCommit = winner;
+      state.driveCommitT = 6 + Math.random() * 4;
     }
     
-    // Health-based behavior modification: prefer medicine when health is low
-    if (state.health < 0.5 && state.hunger > 0.25) {
-      const hasHerbOrMushroom = (state.inventory.herb || 0) > 0 || (state.inventory.mushroom || 0) > 0;
-      const canGatherHerb = s.forageFood.item && s.forageFood.item.harvestType === 'herb';
-      const canGatherMushroom = s.forageFood.item && s.forageFood.item.harvestType === 'mushroom';
-      
-      // If we have medicine ingredients, try to combine
-      if (hasHerbOrMushroom && canCombineAny() && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
-        name = 'combine';
-        action = ACTION_NAMES.indexOf(name);
-      } else if ((canGatherHerb || canGatherMushroom) && (name === 'eat' || name === 'idle')) {
-        name = 'seek_food';
-        action = ACTION_NAMES.indexOf(name);
-      }
-    }
-    
-    // Itch-based behavior modification: prefer activities that could yield the wanted tag
-    if (state.itch > 0.55 && state.hunger > 0.3) {
-      const canSeekMaterial = (s.wood.item || s.forageWood.item || s.ore.item || s.forageOre.item || s.stone.item || s.forageStone.item);
-      const alternatives = [];
-      
-      if (canSeekMaterial) alternatives.push('seek_material');
-      if (canProcessAny()) alternatives.push('process');
-      if (canCombineAny()) alternatives.push('combine');
-      
-      if (alternatives.length > 0 && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
-        name = alternatives[Math.floor(Math.random() * alternatives.length)];
-        action = ACTION_NAMES.indexOf(name);
-      }
-    }
-    
-    // Comfort-based behavior modification: seek shelter at night or when comfort is low
-    const isNight = world.worldClock && world.worldClock.time >= 0.7;
-    const needsShelter = (isNight && state.comfort < 0.55) || state.comfort < 0.4;
-    
-    if (needsShelter && state.hunger > 0.45) {
-      // Comfort overrides most actions except critical hunger
-      const hasHutOrFire = s.hasHut || world.buildings.some((b) => b.type === 'fire');
-      
-      if (hasHutOrFire) {
-        const canRemapAction = (name === 'idle' || name === 'eat' || name === 'combine' || 
-                                name === 'process' || name === 'seek_material' || name === 'seek_food');
-        
-        // At night, comfort beats wanderlust
-        if (canRemapAction) {
-          // Will walk to hut/fire in act() phase
-          name = 'idle';
-          action = ACTION_NAMES.indexOf(name);
-        }
-      }
-    }
-
+    // Apply drive to remap action
+    const result = applyDrive(winner, s, action, name);
+    action = result.action;
+    name = result.name;
     
     state.actionIndex = action;
     state.action = name;
@@ -698,9 +802,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
 
     // Minimal reinforcement shaping: needs-based only
     let shape = 0;
-    if (state.hunger < 0.3) shape -= 0.15; // Penalty for being very hungry
+    if (state.hunger < 0.3) shape -= 0.15;
     if (name === 'eat' && hasAnyFood(s)) {
-      // Reward eating when hungry, penalize when full
       if (state.hunger < 0.45) {
         shape += 0.08;
       } else if (state.hunger >= 0.75) {
@@ -719,10 +822,29 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const nearHut = hutNear();
     const nearFire = !!fireNear();
     
-    if (state.hunger <= 0.3) {
+    if (state.wantBubble && state.wantBubble !== 'Idle') {
+      return;
+    }
+    
+    if (state.driveCommit === 'hunger') {
+      state.wantBubble = 'Hungry';
+    } else if (state.driveCommit === 'health') {
+      state.wantBubble = 'Healing';
+    } else if (state.driveCommit === 'comfort') {
+      if (isNight && !nearHut && !nearFire) {
+        state.wantBubble = 'Cold';
+      } else {
+        state.wantBubble = 'Shelter';
+      }
+    } else if (state.driveCommit === 'wanderlust') {
+      state.wantBubble = 'Restless';
+    } else if (state.driveCommit === 'itch') {
+      state.wantBubble = 'Itch';
+    } else if (state.driveCommit === 'mood') {
+      state.wantBubble = 'Bored';
+    } else if (state.hunger <= 0.3) {
       state.wantBubble = 'Hungry';
     } else if ((isNight && state.comfort < 0.55) || state.comfort < 0.4) {
-      // Comfort need shown when low at night or very low anytime
       if (isNight && !nearHut && !nearFire) {
         state.wantBubble = 'Cold';
       } else {
@@ -2192,6 +2314,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Comfort updates
     updateComfort(dt);
+    
+    // Drive commitment timer
+    if (state.driveCommitT > 0) {
+      state.driveCommitT -= dt;
+    }
 
     if (!state.busy) {
       state.thinkAcc += dt;

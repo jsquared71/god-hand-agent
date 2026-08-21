@@ -298,6 +298,20 @@ function updateFavor(dt) {
   if (campStatus.stocked) {
     campStatus.stocked.classList.toggle('active', chestStocked);
   }
+  
+  // Update world status indicators
+  const isNight = world.worldClock && world.worldClock.time >= 0.7;
+  const worldDayEl = document.getElementById('world-day');
+  const worldWeatherEl = document.getElementById('world-weather');
+  
+  if (worldDayEl) {
+    worldDayEl.textContent = isNight ? 'Night' : 'Day';
+  }
+  
+  if (worldWeatherEl && world.weather) {
+    const weatherText = world.weather.current.charAt(0).toUpperCase() + world.weather.current.slice(1);
+    worldWeatherEl.textContent = weatherText;
+  }
 }
 
 function frame(now) {

@@ -18,6 +18,11 @@ export function serializeWorld(world, agents, camera, gameState, notebook = null
       time: world.worldClock?.time || 0,
       dayIndex: world.worldClock?.dayIndex || 0,
     },
+    weather: world.weather ? {
+      current: world.weather.current,
+      timer: world.weather.timer,
+      duration: world.weather.duration,
+    } : null,
     gameState: {
       favor: gameState.favor,
       favorMax: gameState.favorMax,
@@ -104,6 +109,14 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
   if (state.worldClock && world.worldClock) {
     world.worldClock.time = state.worldClock.time || 0;
     world.worldClock.dayIndex = state.worldClock.dayIndex || 0;
+  }
+  
+  // Restore weather
+  if (state.weather && world.weather) {
+    world.weather.current = state.weather.current || 'clear';
+    world.weather.timer = state.weather.timer || 0;
+    world.weather.duration = state.weather.duration || 60;
+    world.weather.transitionT = 0;
   }
   
   // Restore game state

@@ -27,6 +27,7 @@ import {
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
 import { playFootstep, playGather, playBuild } from './audio.js';
 import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue, isMedicine, getHealthValue } from './discovery.js';
+import { getBiomeAt } from './world.js';
 
 const FORAGE_RADIUS = 1.2;
 const HUNT_RADIUS = 1.5;
@@ -280,6 +281,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const distToOther = distanceToNearestAgent();
     const nearOtherAndSheltered = distToOther < 2.5 && (nearHut || nearFire);
     
+    // Weather effects
+    const isRain = world.weather && world.weather.current === 'rain';
+    const isWind = world.weather && world.weather.current === 'wind';
+    const inTheOpen = !nearHut && !nearFire && !nearBuilding;
+    
     let comfortChange = 0;
     
     // Recovery conditions (priority order)
@@ -312,9 +318,25 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         // Near some building but not hut/fire: slower drain
         comfortChange -= 0.02 * dt;
       }
+      
+      // Extra drain in rain at night
+      if (isRain) {
+        comfortChange -= 0.025 * dt;
+      }
     } else if (!isNight && !nearHut && !nearFire && !nearBuilding) {
       // Day but completely in the open: very slow drain
       comfortChange -= 0.004 * dt;
+    }
+    
+    // Weather effects during the day in the open
+    if (!isNight && inTheOpen) {
+      if (isRain) {
+        // Rain: extra comfort drain
+        comfortChange -= 0.018 * dt;
+      } else if (isWind) {
+        // Wind: slight comfort drain
+        comfortChange -= 0.008 * dt;
+      }
     }
     
     // Apply comfort change and clamp
@@ -365,36 +387,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     state.social = Math.max(0, Math.min(1, state.social + socialChange));
   }
 
-  
-  function getBiomeAt(x, z) {
-    // Biome layout based on world.js:
-    // meadow: x in [3, 13], z in [-6, 6] (east/center)
-    // forest: x in [-14, -6], z in [-6, 6] (west)
-    // rock: x in [-6, 6], z in [7, 15] (south)
-    // water: around x in [-3, -1], z in [-12, -10] (north, pond center ~5.5 radius)
-    
-    const pondCenterX = -2;
-    const pondCenterZ = -11;
-    const pondRadius = 6.5; // Slightly larger than visual pond for gathering area
-    
-    const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
-    if (distToPond < pondRadius) return 'water';
-    
-    if (z >= 7 && z <= 15 && x >= -6 && x <= 6) return 'rock';
-    if (x >= -14 && x <= -6 && z >= -6 && z <= 6) return 'forest';
-    if (x >= 3 && x <= 13 && z >= -6 && z <= 6) return 'meadow';
-    
-    // Default to closest biome edge for ambiguous positions
-    const distToMeadow = Math.max(0, Math.max(3 - x, x - 13), Math.max(-6 - z, z - 6));
-    const distToForest = Math.max(0, Math.max(-14 - x, x - (-6)), Math.max(-6 - z, z - 6));
-    const distToRock = Math.max(0, Math.max(-6 - x, x - 6), Math.max(7 - z, z - 15));
-    
-    const minDist = Math.min(distToMeadow, distToForest, distToRock, distToPond);
-    if (minDist === distToMeadow) return 'meadow';
-    if (minDist === distToForest) return 'forest';
-    if (minDist === distToRock) return 'rock';
-    return 'water';
-  }
   
   function distanceToNearestAgent() {
     if (!world.agents || world.agents.length <= 1) return Infinity;
@@ -1316,9 +1308,23 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const dz = z - group.position.z;
     const dist = Math.hypot(dx, dz);
     if (dist < 0.05) return 0;
-    const step = Math.min(dist, speed * dt);
+    
+    // Apply weather effect on speed
+    const isWind = world.weather && world.weather.current === 'wind';
+    let actualSpeed = speed;
+    if (isWind) {
+      actualSpeed *= 0.85; // Slow down 15% in wind
+    }
+    
+    const step = Math.min(dist, actualSpeed * dt);
     group.position.x += (dx / dist) * step;
     group.position.z += (dz / dist) * step;
+    
+    // Update Y position to follow terrain
+    if (world.heightAt) {
+      group.position.y = world.heightAt(group.position.x, group.position.z) + 2.4;
+    }
+    
     const yaw = Math.atan2(dx, dz);
     state.facing = yaw;
     group.rotation.y = yaw;
@@ -1518,6 +1524,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     // Tools reduce forage time to 75%
     if (state.hasTools) {
       dur *= 0.75;
+    }
+    
+    // Rain slows forage slightly
+    const isRain = world.weather && world.weather.current === 'rain';
+    if (isRain) {
+      dur *= 1.15; // 15% slower in rain
     }
     
     state.busy = { kind: 'forage', t: 0, dur, source, hasTools: state.hasTools };
@@ -2327,6 +2339,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     let healthDrain = 0;
     let healthRegen = 0;
     
+    // Weather effects
+    const isRain = world.weather && world.weather.current === 'rain';
+    const inTheOpen = !isProtected && !world.buildings.some((b) => {
+      const dx = b.mesh.position.x - group.position.x;
+      const dz = b.mesh.position.z - group.position.z;
+      return Math.hypot(dx, dz) < 3.5;
+    });
+    
     // Drain health when starving
     if (state.hunger < 0.1) {
       healthDrain += 0.02 * dt;
@@ -2340,6 +2360,16 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     // Drain health at night if not near hut or fire
     if (isNight && !isProtected) {
       healthDrain += 0.018 * dt;
+    }
+    
+    // Rain in the open: health drain
+    if (isRain && inTheOpen) {
+      healthDrain += 0.012 * dt;
+      
+      // Extra drain at night
+      if (isNight) {
+        healthDrain += 0.015 * dt;
+      }
     }
     
     // Recover health when conditions are good

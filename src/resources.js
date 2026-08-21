@@ -4,7 +4,8 @@ let nextId = 1;
 
 export function spawnPickup(world, assets, type, position, { falling = true, isWorldSpawned = false, spawnOrigin = null } = {}) {
   const mesh = assets.create(type);
-  mesh.position.set(position.x, falling ? 1.15 : 0, position.z);
+  const y = falling ? 1.15 : (world.heightAt ? world.heightAt(position.x, position.z) : 0);
+  mesh.position.set(position.x, y, position.z);
   mesh.userData = {
     ...mesh.userData,
     type,
@@ -62,7 +63,8 @@ export function spawnBuilding(world, assets, type, position) {
     return null;
   }
   
-  mesh.position.set(finalPosition.x, 0, finalPosition.z);
+  const y = world.heightAt ? world.heightAt(finalPosition.x, finalPosition.z) : 0;
+  mesh.position.set(finalPosition.x, y, finalPosition.z);
   mesh.scale.setScalar(0.15);
   mesh.userData = { ...mesh.userData, type, kind: 'building', grow: 0 };
   if (type === 'well') {
@@ -158,8 +160,9 @@ export function updateWorldItems(world, dt) {
     if (!u.settled) {
       u.vy -= 18 * dt;
       p.mesh.position.y += u.vy * dt;
-      if (p.mesh.position.y <= 0) {
-        p.mesh.position.y = 0;
+      const groundY = world.heightAt ? world.heightAt(p.mesh.position.x, p.mesh.position.z) : 0;
+      if (p.mesh.position.y <= groundY) {
+        p.mesh.position.y = groundY;
         if (u.vy < -1) u.vy *= -0.28;
         else {
           u.settled = true;
@@ -167,7 +170,8 @@ export function updateWorldItems(world, dt) {
         }
       }
     } else {
-      p.mesh.position.y = Math.sin(performance.now() * 0.003 + u.bobOff) * 0.04;
+      const groundY = world.heightAt ? world.heightAt(p.mesh.position.x, p.mesh.position.z) : 0;
+      p.mesh.position.y = groundY + Math.sin(performance.now() * 0.003 + u.bobOff) * 0.04;
       p.mesh.rotation.y += dt * 0.4;
     }
   }
@@ -271,11 +275,15 @@ export function updateWorldItems(world, dt) {
   if (world.fauna) {
     for (const creature of world.fauna) {
       creature.hopPhase += dt * 4;
+      
+      // Update Y position for terrain following
+      const groundY = world.heightAt ? world.heightAt(creature.mesh.position.x, creature.mesh.position.z) : 0;
+      
       if (creature.swimPhase !== undefined) {
         creature.swimPhase += dt * 3;
-        creature.mesh.position.y = 0.08 + Math.sin(creature.swimPhase) * 0.03;
+        creature.mesh.position.y = groundY + 0.08 + Math.sin(creature.swimPhase) * 0.03;
       } else {
-        creature.mesh.position.y = Math.abs(Math.sin(creature.hopPhase)) * 0.08;
+        creature.mesh.position.y = groundY + Math.abs(Math.sin(creature.hopPhase)) * 0.08;
       }
       
       // Domestic animals produce resources periodically

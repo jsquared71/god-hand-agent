@@ -94,7 +94,7 @@ function makeGroundTexture() {
   return tex;
 }
 
-function createBiomes(scene, seed = Date.now()) {
+function createBiomes(scene, seed = Date.now(), heightAt) {
   const rng = new SeededRandom(seed);
   const fauna = [];
   const forageSources = [];
@@ -113,7 +113,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.ConeGeometry(0.08, 0.35, 4),
       meadowMat
     );
-    grass.position.set(x, 0.175, z);
+    grass.position.set(x, heightAt(x, z) + 0.175, z);
     grass.rotation.y = rng.next() * Math.PI * 2;
     grass.castShadow = true;
     grass.receiveShadow = true;
@@ -136,7 +136,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(5, 14);
     const z = rng.range(-5, 5);
     const bushGroup = new THREE.Group();
-    bushGroup.position.set(x, 0, z);
+    bushGroup.position.set(x, heightAt(x, z), z);
     
     // Green foliage base
     const bush = new THREE.Mesh(
@@ -192,7 +192,7 @@ function createBiomes(scene, seed = Date.now()) {
     const centerX = rng.range(4, 12);
     const centerZ = rng.range(-4, 4);
     const patchGroup = new THREE.Group();
-    patchGroup.position.set(centerX, 0, centerZ);
+    patchGroup.position.set(centerX, heightAt(centerX, centerZ), centerZ);
     
     // Create a small wheat patch (cluster of stalks)
     for (let j = 0; j < 10; j++) {
@@ -243,7 +243,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(3, 13);
     const z = rng.range(-6, 6);
     const cluster = new THREE.Group();
-    cluster.position.set(x, 0, z);
+    cluster.position.set(x, heightAt(x, z), z);
     
     for (let j = 0; j < 3; j++) {
       const offsetX = (rng.next() - 0.5) * 0.3;
@@ -296,7 +296,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-13, -7);
     const z = rng.range(-5, 5);
     const bush = new THREE.Group();
-    bush.position.set(x, 0, z);
+    bush.position.set(x, heightAt(x, z), z);
     
     // Green foliage
     const foliage = new THREE.Mesh(
@@ -348,7 +348,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = i < herbCount - 2 ? rng.range(4, 12) : rng.range(-12, -7);
     const z = rng.range(-5, 5);
     const herbPatch = new THREE.Group();
-    herbPatch.position.set(x, 0, z);
+    herbPatch.position.set(x, heightAt(x, z), z);
     
     for (let j = 0; j < 5; j++) {
       const offsetX = (rng.next() - 0.5) * 0.4;
@@ -385,7 +385,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(5, 13);
     const z = rng.range(-4, 4);
     const rabbit = new THREE.Group();
-    rabbit.position.set(x, 0, z);
+    rabbit.position.set(x, heightAt(x, z), z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.18, 4, 8), rabbitMat);
     body.rotation.z = Math.PI / 2;
     body.position.y = 0.15;
@@ -424,7 +424,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-14, -6);
     const z = rng.range(-6, 6);
     const tree = new THREE.Group();
-    tree.position.set(x, 0, z);
+    tree.position.set(x, heightAt(x, z), z);
     const trunk = new THREE.Mesh(
       new THREE.CylinderGeometry(0.18, 0.22, 2.5, 8),
       treeMat
@@ -466,7 +466,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.CylinderGeometry(0.15, 0.18, 1.2, 8),
       logMat
     );
-    log.position.set(x, 0.12, z);
+    log.position.set(x, heightAt(x, z) + 0.12, z);
     log.rotation.z = Math.PI / 2;
     log.rotation.y = rng.next() * Math.PI;
     log.castShadow = true;
@@ -493,7 +493,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-12, -6);
     const z = rng.range(-3, 3);
     const deer = new THREE.Group();
-    deer.position.set(x, 0, z);
+    deer.position.set(x, heightAt(x, z), z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.45, 4, 8), deerMat);
     body.rotation.z = Math.PI / 2;
     body.position.y = 0.35;
@@ -543,7 +543,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.DodecahedronGeometry(size, 0),
       isOre ? oreMat : rockMat
     );
-    rock.position.set(x, size * 0.6, z);
+    rock.position.set(x, heightAt(x, z) + size * 0.6, z);
     rock.rotation.set(rng.next(), rng.next(), rng.next());
     rock.castShadow = true;
     rock.receiveShadow = true;
@@ -573,7 +573,7 @@ function createBiomes(scene, seed = Date.now()) {
     new THREE.CircleGeometry(5.5, 24),
     waterMat
   );
-  pond.position.set(pondX, 0.03, pondZ);
+  pond.position.set(pondX, heightAt(pondX, pondZ) + 0.03, pondZ);
   pond.rotation.x = -Math.PI / 2;
   pond.receiveShadow = true;
   scene.add(pond);
@@ -592,7 +592,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.CylinderGeometry(0.04, 0.03, 0.8, 5),
       reedMat
     );
-    reed.position.set(x, 0.4, z);
+    reed.position.set(x, heightAt(x, z) + 0.4, z);
     reed.castShadow = true;
     reed.receiveShadow = true;
     scene.add(reed);
@@ -615,7 +615,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = pondX + Math.cos(angle) * r;
     const z = pondZ + Math.sin(angle) * r;
     const fish = new THREE.Group();
-    fish.position.set(x, 0.12, z);
+    fish.position.set(x, heightAt(x, z) + 0.12, z);
     
     // Larger, more visible body
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.32, 4, 8), fishMat);
@@ -666,7 +666,7 @@ function createBiomes(scene, seed = Date.now()) {
     const z = pondZ + Math.sin(angle) * r;
     // Invisible marker for water gathering
     const waterNode = new THREE.Group();
-    waterNode.position.set(x, 0, z);
+    waterNode.position.set(x, heightAt(x, z), z);
     scene.add(waterNode);
     forageSources.push({
       mesh: waterNode,
@@ -790,17 +790,91 @@ export function createWorld(canvas, seed = null) {
   moon.castShadow = false;
   scene.add(moon);
 
+  // Create heightmap terrain
+  const groundSize = 90;
+  const groundSegments = 80; // Subdivisions for terrain variation
+  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, groundSegments, groundSegments);
+  
+  // Apply height variations based on biomes
+  const positions = groundGeometry.attributes.position.array;
+  const colors = new Float32Array(positions.length); // For vertex colors
+  const terrainRng = new SeededRandom(worldSeed);
+  
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const z = positions[i + 1];
+    
+    const biome = getBiomeAt(x, z);
+    let height = 0;
+    let r = 0.54, g = 0.60, b = 0.48; // Default meadow green
+    
+    // Noise for variation (simple seeded noise)
+    const noiseX = Math.sin(x * 0.3 + terrainRng.next() * 100) * Math.cos(z * 0.25 + terrainRng.next() * 100);
+    const noiseZ = Math.cos(x * 0.25 + terrainRng.next() * 100) * Math.sin(z * 0.3 + terrainRng.next() * 100);
+    const noise = (noiseX + noiseZ) * 0.5;
+    
+    if (biome === 'water') {
+      // Pond: basin, lower than surroundings
+      const pondCenterX = -2;
+      const pondCenterZ = -11;
+      const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
+      height = -0.3 - noise * 0.15; // Basin
+      r = 0.35; g = 0.55; b = 0.50; // Darker greenish water bed
+    } else if (biome === 'rock') {
+      // Rocky: higher and bumpier
+      height = 0.4 + noise * 0.6;
+      r = 0.48; g = 0.48; b = 0.44; // Gray-brown
+    } else if (biome === 'forest') {
+      // Forest: rolling hills
+      height = 0.1 + noise * 0.35;
+      r = 0.35; g = 0.50; b = 0.32; // Darker forest green
+    } else {
+      // Meadow + camp: gentle, almost flat
+      height = 0.02 + noise * 0.12;
+      r = 0.54; g = 0.60; b = 0.48; // Light green
+    }
+    
+    positions[i + 2] = height;
+    colors[i] = r;
+    colors[i + 1] = g;
+    colors[i + 2] = b;
+  }
+  
+  groundGeometry.attributes.position.needsUpdate = true;
+  groundGeometry.computeVertexNormals();
+  groundGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  
   const groundMat = new THREE.MeshStandardMaterial({
     map: makeGroundTexture(),
-    color: '#8a9a7a',
+    vertexColors: true,
     roughness: 0.95,
     metalness: 0,
   });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), groundMat);
+  const ground = new THREE.Mesh(groundGeometry, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   ground.name = 'ground';
   scene.add(ground);
+  
+  // Height sampling function
+  function heightAt(x, z) {
+    const biome = getBiomeAt(x, z);
+    
+    // Recreate noise (simple approximation)
+    const noiseX = Math.sin(x * 0.3) * Math.cos(z * 0.25);
+    const noiseZ = Math.cos(x * 0.25) * Math.sin(z * 0.3);
+    const noise = (noiseX + noiseZ) * 0.5;
+    
+    if (biome === 'water') {
+      return -0.3 - noise * 0.15;
+    } else if (biome === 'rock') {
+      return 0.4 + noise * 0.6;
+    } else if (biome === 'forest') {
+      return 0.1 + noise * 0.35;
+    } else {
+      return 0.02 + noise * 0.12;
+    }
+  }
 
   const grid = new THREE.GridHelper(90, 36, 0x9aa88c, 0x6d7864);
   grid.position.y = 0.01;
@@ -809,7 +883,7 @@ export function createWorld(canvas, seed = null) {
   scene.add(grid);
 
   // Biome setup - 4 distinct zones with seeded randomization
-  const biomes = createBiomes(scene, worldSeed);
+  const biomes = createBiomes(scene, worldSeed, heightAt);
 
   // Dedicated invisible plane so drops always raycast, even if grid/ground change.
   const dropPlane = new THREE.Mesh(
@@ -831,6 +905,36 @@ export function createWorld(canvas, seed = null) {
   const fauna = biomes.fauna;
   const forageSources = biomes.forageSources;
   
+  // Weather system
+  const WEATHER_STATES = ['clear', 'wind', 'rain'];
+  const weather = {
+    current: 'clear',
+    timer: 0,
+    duration: 60 + Math.random() * 90, // 60-150 seconds per state
+    transitionT: 0,
+    transitionDuration: 5.0, // 5 second transition
+  };
+  
+  function updateWeather(dt) {
+    weather.timer += dt;
+    
+    // Transition time
+    if (weather.transitionT < weather.transitionDuration) {
+      weather.transitionT += dt;
+    }
+    
+    // Switch weather state
+    if (weather.timer >= weather.duration) {
+      weather.timer = 0;
+      weather.transitionT = 0;
+      weather.duration = 60 + Math.random() * 90;
+      
+      // Pick next state (not same as current)
+      const otherStates = WEATHER_STATES.filter(s => s !== weather.current);
+      weather.current = otherStates[Math.floor(Math.random() * otherStates.length)];
+    }
+  }
+  
   // Day/night cycle (4-5 minutes real time: 70% day, 30% night)
   const DAY_LENGTH = 270; // seconds total (4.5 minutes)
   const NIGHT_START = 0.7; // 70% through the day
@@ -841,6 +945,8 @@ export function createWorld(canvas, seed = null) {
   };
   
   function updateDayNight(dt) {
+    updateWeather(dt); // Update weather alongside day/night
+    
     worldClock.time += dt / DAY_LENGTH;
     if (worldClock.time >= 1) {
       worldClock.time -= 1;
@@ -940,9 +1046,43 @@ export function createWorld(canvas, seed = null) {
     sky,
     seed: worldSeed,
     worldClock,
+    weather,
+    heightAt,
+    getBiomeAt,
     updateDayNight,
     render() {
       renderer.render(scene, camera);
     },
   };
+}
+
+// Export getBiomeAt for use in agent.js
+export function getBiomeAt(x, z) {
+  // Biome layout:
+  // meadow: x in [3, 13], z in [-6, 6] (east/center)
+  // forest: x in [-14, -6], z in [-6, 6] (west)
+  // rock: x in [-6, 6], z in [7, 15] (south)
+  // water: around x in [-3, -1], z in [-12, -10] (north, pond center ~5.5 radius)
+  
+  const pondCenterX = -2;
+  const pondCenterZ = -11;
+  const pondRadius = 6.5;
+  
+  const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
+  if (distToPond < pondRadius) return 'water';
+  
+  if (z >= 7 && z <= 15 && x >= -6 && x <= 6) return 'rock';
+  if (x >= -14 && x <= -6 && z >= -6 && z <= 6) return 'forest';
+  if (x >= 3 && x <= 13 && z >= -6 && z <= 6) return 'meadow';
+  
+  // Default to closest biome edge
+  const distToMeadow = Math.max(0, Math.max(3 - x, x - 13), Math.max(-6 - z, z - 6));
+  const distToForest = Math.max(0, Math.max(-14 - x, x - (-6)), Math.max(-6 - z, z - 6));
+  const distToRock = Math.max(0, Math.max(-6 - x, x - 6), Math.max(7 - z, z - 15));
+  
+  const minDist = Math.min(distToMeadow, distToForest, distToRock, distToPond);
+  if (minDist === distToMeadow) return 'meadow';
+  if (minDist === distToForest) return 'forest';
+  if (minDist === distToRock) return 'rock';
+  return 'water';
 }

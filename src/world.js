@@ -732,13 +732,15 @@ export function dressWorld(world, assets) {
       const pos = oldMesh.position.clone();
       const dx = Math.cos(animal.dir);
       const dz = Math.sin(animal.dir);
-      const yaw = Math.atan2(dx, dz) - Math.PI / 2;
+      // GLB models face +Z, so no -π/2 offset
+      const yaw = Math.atan2(dx, dz);
       
       world.scene.remove(oldMesh);
       
       const newMesh = assets.create(glbId);
       newMesh.position.copy(pos);
       newMesh.rotation.y = yaw;
+      newMesh.userData.fromGltf = true;
       world.scene.add(newMesh);
       
       animal.mesh = newMesh;

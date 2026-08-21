@@ -2084,7 +2084,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
       const remain = walkToward(target.x, target.z, dt, speed);
       if (isForage) {
-        if (remain < FORAGE_RADIUS) startForage(bestTarget);
+        if (remain < FORAGE_RADIUS) {
+          const harvestType = bestTarget.harvestType;
+          const isMat = isMaterialType(harvestType);
+          if (!isMat || canAddMaterial(1)) {
+            startForage(bestTarget);
+          }
+        }
       } else {
         if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
       }
@@ -2155,7 +2161,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
         const remain = walkToward(target.x, target.z, dt, speed);
         if (isForage) {
-          if (remain < FORAGE_RADIUS) startForage(bestTarget);
+          if (remain < FORAGE_RADIUS) {
+            const harvestType = bestTarget.harvestType;
+            const isMat = isMaterialType(harvestType);
+            if (!isMat || canAddMaterial(1)) {
+              startForage(bestTarget);
+            }
+          }
         } else {
           if (remain < PICKUP_RADIUS) pickupIfClose(['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
         }
@@ -2241,7 +2253,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         const target = getSideSlotTarget(bestTarget.mesh.position.x, bestTarget.mesh.position.z);
         const remain = walkToward(target.x, target.z, dt, speed);
         if (isForage) {
-          if (remain < FORAGE_RADIUS) startForage(bestTarget);
+          if (remain < FORAGE_RADIUS) {
+            const harvestType = bestTarget.harvestType;
+            const isMat = isMaterialType(harvestType);
+            if (!isMat || canAddMaterial(1)) {
+              startForage(bestTarget);
+            }
+          }
         } else {
           if (remain < PICKUP_RADIUS) pickupIfClose([bestTarget.type]);
         }

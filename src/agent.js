@@ -261,10 +261,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       
       if (isBoring) {
         // Prefer variety: switch to different activity
-        const alternatives = ['seek_material', 'process', 'build'];
+        const alternatives = [];
         if (canProcessAny()) alternatives.push('process');
         if (nextBuild()) alternatives.push('build');
         if (canCombineAny()) alternatives.push('combine');
+        // Always have seek_material as fallback
+        alternatives.push('seek_material');
         
         // Pick a random alternative that's not the same as last
         const filtered = alternatives.filter(a => a !== state.lastBusyKind);

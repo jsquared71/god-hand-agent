@@ -280,9 +280,11 @@ export function updateWorldItems(world, dt) {
       const groundY = world.heightAt ? world.heightAt(creature.mesh.position.x, creature.mesh.position.z) : 0;
       
       if (creature.swimPhase !== undefined) {
+        // Fish: swim slightly above pond floor with gentle bob
         creature.swimPhase += dt * 3;
-        creature.mesh.position.y = groundY + 0.08 + Math.sin(creature.swimPhase) * 0.03;
+        creature.mesh.position.y = groundY + Math.sin(creature.swimPhase) * 0.04;
       } else {
+        // Land animals: hop on the ground
         creature.mesh.position.y = groundY + Math.abs(Math.sin(creature.hopPhase)) * 0.08;
       }
       
@@ -343,9 +345,20 @@ export function updateWorldItems(world, dt) {
       if (nextX >= b.minX && nextX <= b.maxX && nextZ >= b.minZ && nextZ <= b.maxZ) {
         creature.mesh.position.x = nextX;
         creature.mesh.position.z = nextZ;
-        // Orient mesh to face movement direction
-        // Models are built with head at +X, so we need to offset by -π/2
-        creature.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+        
+        // Orient mesh to face movement direction only when actually moving
+        if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+          // Check if this creature is using a GLB model
+          const isGlb = creature.mesh.userData?.fromGltf || false;
+          
+          if (isGlb) {
+            // GLB models (rabbit, deer, fish) face +Z, so no offset needed
+            creature.mesh.rotation.y = Math.atan2(dx, dz);
+          } else {
+            // Procedural models face +X, so offset by -π/2
+            creature.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+          }
+        }
       } else {
         creature.dir += Math.PI;
       }

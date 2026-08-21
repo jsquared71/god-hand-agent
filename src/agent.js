@@ -40,7 +40,8 @@ const FOOD_CAP = 4;
 
 export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
   const group = assets.create('agent');
-  group.position.set(0, 2.4, 0);
+  const spawnY = world.heightAt ? world.heightAt(0, 0) + 2.4 : 2.4;
+  group.position.set(0, spawnY, 0);
   world.scene.add(group);
 
   const parts = group.userData.parts || {};
@@ -1361,9 +1362,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     group.position.x += (dx / dist) * step;
     group.position.z += (dz / dist) * step;
     
-    // Update Y position to follow terrain
+    // Update Y position to follow terrain (feet on ground)
     if (world.heightAt) {
-      group.position.y = world.heightAt(group.position.x, group.position.z) + 2.4;
+      group.position.y = world.heightAt(group.position.x, group.position.z);
     }
     
     const yaw = Math.atan2(dx, dz);
@@ -1442,10 +1443,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     // Procedural fallback animation (original code)
+    // Note: Do not overwrite group.position.y here; it's managed by walkToward/update
     if (!root) {
-      group.position.y = walking
-        ? Math.abs(Math.sin(state.walkPhase)) * 0.05
-        : Math.sin(t * 2.2) * 0.02;
       return;
     }
     if (walking) {
@@ -2437,13 +2436,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (!state.landed) {
       state.vy -= 18 * dt;
       group.position.y += state.vy * dt;
-      if (group.position.y <= 0) {
-        group.position.y = 0;
+      const groundY = world.heightAt ? world.heightAt(group.position.x, group.position.z) : 0;
+      if (group.position.y <= groundY) {
+        group.position.y = groundY;
         if (state.vy < -2) state.vy *= -0.25;
         else {
           state.landed = true;
           state.vy = 0;
-          group.position.y = 0;
+          group.position.y = groundY;
         }
       }
       animate(dt, false);

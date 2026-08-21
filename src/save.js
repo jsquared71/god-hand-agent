@@ -36,6 +36,8 @@ export function serializeWorld(world, agents, camera, gameState, notebook = null
       currentBiome: agent.state.currentBiome || null,
       biomeEntryTime: agent.state.biomeEntryTime || 0,
       lastBiomeVisit: agent.state.lastBiomeVisit || {},
+      wanderTargetBiome: agent.state.wanderTargetBiome || null,
+      wanderTargetSourceKey: agent.state.wanderTargetSourceKey || null,
       inventory: { ...agent.state.inventory },
       hasTools: agent.state.hasTools,
       action: agent.state.action,
@@ -130,6 +132,8 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
     agent.state.currentBiome = agentData.currentBiome ?? null;
     agent.state.biomeEntryTime = agentData.biomeEntryTime ?? 0;
     agent.state.lastBiomeVisit = agentData.lastBiomeVisit ?? {};
+    agent.state.wanderTargetBiome = agentData.wanderTargetBiome ?? null;
+    agent.state.wanderTargetSourceKey = agentData.wanderTargetSourceKey ?? null;
     agent.state.inventory = { ...agentData.inventory };
     agent.state.hasTools = agentData.hasTools ?? false;
     agent.state.action = agentData.action ?? 'idle';

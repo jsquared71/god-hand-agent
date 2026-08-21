@@ -96,6 +96,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     itch: 0.25, // Property drive (0 = content, 1 = burning need)
     itchTag: 'sharp', // Which property they currently want
     itchBoostTimer: 0, // Timer for 1.5× itch gain after process/combine that didn't yield tag
+    wanderTargetBiome: null, // Committed biome when wanderlust is high
+    wanderTargetSourceKey: null, // Small key for wander target (harvestType for re-resolve)
   };
 
   const hud = {
@@ -285,29 +287,53 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
   
   function getForageBiome(source) {
-    // Infer biome from harvest type or position
+    // Infer biome from position or biome tag
     if (!source) return null;
     
     // Direct biome tag if available
     if (source.biome) return source.biome;
     
-    // Infer from harvest type
-    const harvestType = source.harvestType;
-    if (harvestType === 'berry' || harvestType === 'grain' || harvestType === 'mushroom' || harvestType === 'herb') {
-      return 'meadow';
-    }
-    if (harvestType === 'wood' || harvestType === 'fruit') {
-      return 'forest';
-    }
-    if (harvestType === 'stone' || harvestType === 'ore') {
-      return 'rock';
-    }
-    if (harvestType === 'water' || harvestType === 'fish') {
-      return 'water';
+    // Infer from position (accurate place-novelty)
+    if (source.mesh && source.mesh.position) {
+      return getBiomeAt(source.mesh.position.x, source.mesh.position.z);
     }
     
-    // Fallback: infer from position
-    return getBiomeAt(source.mesh.position.x, source.mesh.position.z);
+    return null;
+  }
+
+  function pickWanderTarget(currentBiome) {
+    // Pick a committed wander target: find stalest biome and a source there
+    const allBiomes = ['meadow', 'forest', 'rock', 'water'];
+    const otherBiomes = allBiomes.filter(b => b !== currentBiome);
+    
+    // Sort by staleness (longest lastBiomeVisit, or never visited)
+    otherBiomes.sort((a, b) => {
+      const timeA = state.lastBiomeVisit[a] ?? 999;
+      const timeB = state.lastBiomeVisit[b] ?? 999;
+      return timeB - timeA;
+    });
+    
+    const targetBiome = otherBiomes[0];
+    
+    // Find any forage source in that biome
+    const allForageSources = world.forageSources || [];
+    const sources = allForageSources
+      .filter(s => s.charges > 0)
+      .map(s => ({
+        source: s,
+        biome: getForageBiome(s),
+        dist: Math.hypot(s.mesh.position.x - group.position.x, s.mesh.position.z - group.position.z),
+      }))
+      .filter(opt => opt.biome === targetBiome)
+      .sort((a, b) => a.dist - b.dist);
+    
+    if (sources.length > 0) {
+      const src = sources[0].source;
+      // Store only harvestType as key for re-resolve on load
+      return { biome: targetBiome, sourceKey: src.harvestType };
+    }
+    
+    return { biome: targetBiome, sourceKey: null };
   }
 
   function snap() {
@@ -328,7 +354,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const forageStone = nearestForageSource(world, group.position, ['stone']);
     const forageWater = nearestForageSource(world, group.position, ['water']);
     
-    // If wanderlust is high (>0.6), prefer targets in different biome
+    // If wanderlust is high (>0.6), prefer targets in committed biome
     let forageTargets = {
       food: forageFood,
       wood: forageWood,
@@ -338,28 +364,37 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     };
     
     if (state.wanderlust > 0.6) {
-      // Find forage sources in different biomes
-      const allForageSources = world.forageSources || [];
+      // Update committed target if needed
+      if (!state.wanderTargetBiome || state.wanderTargetBiome === currentBiome) {
+        const target = pickWanderTarget(currentBiome);
+        state.wanderTargetBiome = target.biome;
+        state.wanderTargetSourceKey = target.sourceKey;
+      }
       
-      for (const [key, types] of [
-        ['food', ['berry', 'grain', 'fish', 'mushroom', 'fruit', 'herb']],
-        ['wood', ['wood']],
-        ['ore', ['ore']],
-        ['stone', ['stone']],
-        ['water', ['water']],
-      ]) {
-        const alternatives = allForageSources
-          .filter(s => types.includes(s.harvestType) && s.charges > 0)
-          .map(s => ({
-            source: s,
-            biome: getForageBiome(s),
-            dist: Math.hypot(s.mesh.position.x - group.position.x, s.mesh.position.z - group.position.z),
-          }))
-          .filter(opt => opt.biome && opt.biome !== currentBiome)
-          .sort((a, b) => a.dist - b.dist);
+      // If we have a committed target, use sources from that biome
+      if (state.wanderTargetBiome) {
+        const allForageSources = world.forageSources || [];
         
-        if (alternatives.length > 0) {
-          forageTargets[key] = { item: alternatives[0].source, dist: alternatives[0].dist };
+        for (const [key, types] of [
+          ['food', ['berry', 'grain', 'fish', 'mushroom', 'fruit', 'herb']],
+          ['wood', ['wood']],
+          ['ore', ['ore']],
+          ['stone', ['stone']],
+          ['water', ['water']],
+        ]) {
+          const alternatives = allForageSources
+            .filter(s => types.includes(s.harvestType) && s.charges > 0)
+            .map(s => ({
+              source: s,
+              biome: getForageBiome(s),
+              dist: Math.hypot(s.mesh.position.x - group.position.x, s.mesh.position.z - group.position.z),
+            }))
+            .filter(opt => opt.biome === state.wanderTargetBiome)
+            .sort((a, b) => a.dist - b.dist);
+          
+          if (alternatives.length > 0) {
+            forageTargets[key] = { item: alternatives[0].source, dist: alternatives[0].dist };
+          }
         }
       }
     }
@@ -466,6 +501,27 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (name === 'eat' && state.hunger >= 0.75) {
       name = 'seek_material';
       action = ACTION_NAMES.indexOf('seek_material');
+    }
+    
+    // Wanderlust-based behavior modification: move to other biome when restless
+    if (state.wanderlust > 0.6 && state.hunger >= 0.55) {
+      // Not hungry enough to force eating, and wanderlust is high
+      const isIdleAction = (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process');
+      
+      if (isIdleAction || (name === 'seek_food' && (state.inventory.berry || 0) > 0)) {
+        // Remap to seeking in the target biome
+        const hasForageTargets = s.forageFood.item || s.forageWood.item || s.forageOre.item || s.forageStone.item;
+        if (hasForageTargets) {
+          // Pick seek_food or seek_material based on what's available
+          if (s.forageFood.item) {
+            name = 'seek_food';
+            action = ACTION_NAMES.indexOf('seek_food');
+          } else {
+            name = 'seek_material';
+            action = ACTION_NAMES.indexOf('seek_material');
+          }
+        }
+      }
     }
     
     // Entertainment-based behavior modification: prefer variety when bored
@@ -1259,7 +1315,19 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       
       // Build list of options with distances
       const options = [];
-      if (food) options.push({ type: 'pickup', item: food, dist: s.food.dist });
+      
+      // If wanderlust is high, ignore same-biome pickups if other-biome forage exists
+      if (state.wanderlust > 0.6 && forageFood) {
+        const forageBiome = getForageBiome(forageFood);
+        if (forageBiome && forageBiome !== s.currentBiome) {
+          // Skip same-biome pickup, prefer other-biome forage
+        } else {
+          if (food) options.push({ type: 'pickup', item: food, dist: s.food.dist });
+        }
+      } else {
+        if (food) options.push({ type: 'pickup', item: food, dist: s.food.dist });
+      }
+      
       if (forageFood) options.push({ type: 'forage', item: forageFood, dist: s.forageFood.dist });
       if (huntable && hasWeapon()) options.push({ type: 'hunt', item: huntable, dist: s.huntable.dist });
       if (tendable && s.hasPen && s.hasTrough) options.push({ type: 'tend', item: tendable, dist: s.tendable.dist });
@@ -1371,7 +1439,19 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       // Find all options (pickup or forage)
       const options = [];
       
-      if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false, type: n.item.type });
+      // If wanderlust is high, ignore same-biome pickups if other-biome forage exists
+      const hasOtherBiomeForage = [forageWood, forageOre, forageStone].some(f => {
+        if (!f) return false;
+        const biomef = getForageBiome(f);
+        return biomef && biomef !== s.currentBiome;
+      });
+      
+      if (state.wanderlust > 0.6 && hasOtherBiomeForage) {
+        // Skip same-biome pickup, prefer other-biome forage
+      } else {
+        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false, type: n.item.type });
+      }
+      
       if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true, type: forageWood.harvestType });
       if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true, type: forageOre.harvestType });
       if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true, type: forageStone.harvestType });
@@ -1609,7 +1689,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (hud.moodFill) hud.moodFill.style.width = `${m}%`;
     if (hud.moodVal) hud.moodVal.textContent = `${m}%`;
     if (hud.wanderlustFill) hud.wanderlustFill.style.width = `${w}%`;
-    if (hud.wanderlustVal) hud.wanderlustVal.textContent = `${w}%`;
+    
+    // Show wander target biome if wanderlust is high
+    let wanderText = `${w}%`;
+    if (state.wanderTargetBiome && state.wanderlust > 0.6) {
+      wanderText += ` → ${state.wanderTargetBiome}`;
+    }
+    if (hud.wanderlustVal) hud.wanderlustVal.textContent = wanderText;
+    
     if (hud.itchFill) hud.itchFill.style.width = `${i}%`;
     if (hud.itchVal) hud.itchVal.textContent = `${i}%`;
     if (hud.itchTag) hud.itchTag.textContent = state.itchTag || 'sharp';
@@ -1757,6 +1844,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         state.wanderlust = Math.max(0, state.wanderlust - 0.3);
       }
       
+      // Clear wander target if we entered it
+      if (state.wanderTargetBiome === currentBiome) {
+        state.wanderTargetBiome = null;
+        state.wanderTargetSourceKey = null;
+      }
+      
       // Update biome tracking
       if (state.currentBiome) {
         state.lastBiomeVisit[state.currentBiome] = 0; // Just left this biome
@@ -1787,6 +1880,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     state.wanderlust = Math.min(1, state.wanderlust + wanderlustGain);
+    
+    // Clear wander target if wanderlust drops below threshold
+    if (state.wanderlust < 0.4) {
+      state.wanderTargetBiome = null;
+      state.wanderTargetSourceKey = null;
+    }
     
     // Itch updates
     updateItch(dt);

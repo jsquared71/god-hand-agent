@@ -713,8 +713,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
       }
     } else if (winner === 'social') {
-      // Remap idle/eat/combine/process/seek_food to idle (will walk to other agent in act())
-      if (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process' || name === 'seek_food') {
+      // Remap idle/eat/combine/process/seek_food/seek_material/build to idle (will walk to other agent in act())
+      if (name === 'idle' || name === 'eat' || name === 'combine' || name === 'process' || name === 'seek_food' || name === 'seek_material' || name === 'build') {
         name = 'idle';
         action = ACTION_NAMES.indexOf('idle');
       }
@@ -1692,11 +1692,40 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const actName = state.action;
 
     if (actName === 'idle' || actName === 'idle-hungry') {
-      // Check if we should seek shelter for comfort
+      // Check if we should walk toward the other settler for social
+      if (state.driveCommit === 'social' && world.agents && world.agents.length > 1) {
+        const distToOther = distanceToNearestAgent();
+        
+        // Walk toward the other settler if not already close
+        if (distToOther > 1.3) {
+          // Find the other agent
+          let otherAgent = null;
+          for (const other of world.agents) {
+            if (other.group !== group) {
+              otherAgent = other;
+              break;
+            }
+          }
+          
+          if (otherAgent) {
+            // Use getSideSlotTarget to maintain personal space
+            const target = getSideSlotTarget(otherAgent.group.position.x, otherAgent.group.position.z);
+            const remain = walkToward(target.x, target.z, dt, speed);
+            
+            // Stop at personal space (~1.1-1.4 XZ)
+            if (remain < 1.4) {
+              return false; // Arrived, linger
+            }
+            return true; // Still walking
+          }
+        }
+      }
+      
+      // Check if we should seek shelter for comfort (only when comfort drive, not social)
       const isNight = world.worldClock && world.worldClock.time >= 0.7;
       const needsShelter = (isNight && state.comfort < 0.55) || state.comfort < 0.4;
       
-      if (needsShelter && state.hunger > 0.45 && !state.sluggish) {
+      if (needsShelter && state.hunger > 0.45 && !state.sluggish && state.driveCommit !== 'social') {
         // Try to walk to nearest hut or fire
         const hutBuilding = world.buildings.find((b) => b.type === 'hut');
         const fireBuilding = world.buildings.find((b) => b.type === 'fire');
@@ -1737,35 +1766,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           const target = getSideSlotTarget(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
           const remain = walkToward(target.x, target.z, dt, speed);
           return remain >= 0.5;
-        }
-      }
-      
-      // Check if we should walk toward the other settler for social
-      if (state.driveCommit === 'social' && world.agents && world.agents.length > 1) {
-        const distToOther = distanceToNearestAgent();
-        
-        // Walk toward the other settler if not already close
-        if (distToOther > 1.3) {
-          // Find the other agent
-          let otherAgent = null;
-          for (const other of world.agents) {
-            if (other.group !== group) {
-              otherAgent = other;
-              break;
-            }
-          }
-          
-          if (otherAgent) {
-            // Use getSideSlotTarget to maintain personal space
-            const target = getSideSlotTarget(otherAgent.group.position.x, otherAgent.group.position.z);
-            const remain = walkToward(target.x, target.z, dt, speed);
-            
-            // Stop at personal space (~1.1-1.4 XZ)
-            if (remain < 1.4) {
-              return false; // Arrived, linger
-            }
-            return true; // Still walking
-          }
         }
       }
       

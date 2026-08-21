@@ -342,9 +342,10 @@ function createBiomes(scene, seed = Date.now()) {
     color: '#6a8a4a',
     roughness: 0.85,
   });
-  const herbCount = rng.int(4, 7);
+  const herbCount = rng.int(5, 8);
   for (let i = 0; i < herbCount; i++) {
-    const x = rng.range(4, 12);
+    // Spread herbs in meadow and forest
+    const x = i < herbCount - 2 ? rng.range(4, 12) : rng.range(-12, -7);
     const z = rng.range(-5, 5);
     const herbPatch = new THREE.Group();
     herbPatch.position.set(x, 0, z);

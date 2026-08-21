@@ -96,6 +96,10 @@ body::after {
   gap: 8px;
 }
 
+.bar-row:has(.bar-tag) {
+  grid-template-columns: 62px 1fr 42px 50px;
+}
+
 .bar-label {
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -134,6 +138,10 @@ body::after {
   background: linear-gradient(90deg, #8a6a3a, #d4a574);
 }
 
+.bar-fill.itch {
+  background: linear-gradient(90deg, #1a7a8a, #2ac9d8);
+}
+
 .bar-fill.favor {
   background: linear-gradient(90deg, #8a5a12, var(--accent));
 }
@@ -143,6 +151,15 @@ body::after {
   color: var(--ink);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.bar-tag {
+  font-size: 10px;
+  color: #2ac9d8;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
 }
 
 .settler-card {

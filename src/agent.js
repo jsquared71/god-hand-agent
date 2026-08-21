@@ -25,7 +25,7 @@ import {
   ALL_ITEM_TYPES,
 } from './recipes.js';
 import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
-import { playFootstep, playGather, playBuild } from './audio.js';
+import { playFootstep, playGather, playBuild, playEat, playProcess, playCombine } from './audio.js';
 import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue, isMedicine, getHealthValue } from './discovery.js';
 import { getBiomeAt } from './world.js';
 
@@ -1344,11 +1344,12 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const root = parts.root;
     const t = performance.now() * 0.001;
     
-    // Footstep sound
+    // Footstep sound with biome awareness
     if (walking && root) {
       const phase = Math.sin(state.walkPhase);
       if (phase > 0.9 && !state.lastFootstep) {
-        playFootstep();
+        const currentBiome = getBiomeAt(group.position.x, group.position.z);
+        playFootstep(state.name, currentBiome);
         state.lastFootstep = true;
       } else if (phase < 0) {
         state.lastFootstep = false;
@@ -1450,6 +1451,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       rec = { hunger: 0.1, time: 2.5, energy: 0.02 };
     }
     
+    // Play soft eating sound
+    playEat();
+    
     state.busy = { kind: 'eat', t: 0, dur: rec.time, type, fromWorldItem };
   }
   
@@ -1475,6 +1479,10 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const atBench = !!benchNear();
     const nearFire = !!fireNear();
     const dur = processDuration(inputType, { atBench, hasTools: state.hasTools, nearFire });
+    
+    // Play processing sound
+    playProcess();
+    
     state.busy = { kind: 'process', t: 0, dur, inputType, atBench, nearFire };
   }
 
@@ -1532,6 +1540,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       dur *= 1.15; // 15% slower in rain
     }
     
+    // Play gather sound with harvest type
+    playGather(harvestType);
+    
     state.busy = { kind: 'forage', t: 0, dur, source, hasTools: state.hasTools };
   }
   
@@ -1546,6 +1557,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
   
   function startCombine(item1, item2) {
+    // Play combine sound (will be louder if discovered=true)
+    playCombine(false);
+    
     state.busy = { kind: 'combine', t: 0, dur: 5.0, item1, item2 };
   }
 
@@ -1643,7 +1657,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else if (b.kind === 'forage') {
       const harvested = harvestForageSource(world, assets, b.source, group.position, b.hasTools || false);
       if (harvested) {
-        playGather();
         brain.reinforce(0.6);
       }
     } else if (b.kind === 'combine') {
@@ -1663,6 +1676,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           // If output doesn't have the itch tag, set boost timer
           if (!itemHasTag(outputId, state.itchTag, state.notebook)) {
             state.itchBoostTimer = 10.0;
+          }
+          
+          // Play discovery sound if new
+          if (result.discovered) {
+            playCombine(true);
           }
           
           // Entertainment: boost for new discovery, drain for repetition
@@ -1694,7 +1712,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else if (b.kind === 'hunt') {
       const hunted = huntFauna(world, assets, b.creature, group.position);
       if (hunted) {
-        playGather();
         brain.reinforce(0.8);
       }
     } else if (b.kind === 'tend') {

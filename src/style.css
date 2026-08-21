@@ -130,6 +130,10 @@ body::after {
   background: linear-gradient(90deg, #6a4c93, #b565d8);
 }
 
+.bar-fill.wanderlust {
+  background: linear-gradient(90deg, #8a6a3a, #d4a574);
+}
+
 .bar-fill.favor {
   background: linear-gradient(90deg, #8a5a12, var(--accent));
 }

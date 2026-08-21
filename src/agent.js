@@ -69,6 +69,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     health: 1.0, // Health stat (1 = full health, 0 = critical)
     entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
     wanderlust: 0.0, // Place-novelty drive (0 = content, 1 = restless)
+    comfort: 0.7, // Shelter/warmth drive (1 = settled, 0 = miserable)
     inventory: emptyInventory(),
     hasTools: false,
     bestGatherMult: 1.0,
@@ -113,6 +114,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     itchFill: document.getElementById(`${name.toLowerCase()}-itch-fill`),
     itchVal: document.getElementById(`${name.toLowerCase()}-itch-val`),
     itchTag: document.getElementById(`${name.toLowerCase()}-itch-tag`),
+    comfortFill: document.getElementById(`${name.toLowerCase()}-comfort-fill`),
+    comfortVal: document.getElementById(`${name.toLowerCase()}-comfort-val`),
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
@@ -236,6 +239,81 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       
       state.itch = Math.min(1, state.itch + itchGain);
     }
+  }
+
+  
+  function updateComfort(dt) {
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const nearHut = hutNear();
+    const nearFire = !!fireNear();
+    const nearBuilding = world.buildings.some((b) => {
+      const dx = b.mesh.position.x - group.position.x;
+      const dz = b.mesh.position.z - group.position.z;
+      return Math.hypot(dx, dz) < 3.5;
+    });
+    
+    // Check for furniture (chair/bed/table) if they exist
+    const nearFurniture = world.buildings.some((b) => {
+      if (!['chair', 'bed', 'table'].includes(b.type)) return false;
+      const dx = b.mesh.position.x - group.position.x;
+      const dz = b.mesh.position.z - group.position.z;
+      return Math.hypot(dx, dz) < 2.5;
+    });
+    
+    // Check if very close to hut (inside or very near)
+    let veryCloseToHut = false;
+    if (nearHut) {
+      const hutBuilding = world.buildings.find((b) => b.type === 'hut');
+      if (hutBuilding) {
+        const dx = hutBuilding.mesh.position.x - group.position.x;
+        const dz = hutBuilding.mesh.position.z - group.position.z;
+        veryCloseToHut = Math.hypot(dx, dz) < 2.0;
+      }
+    }
+    
+    // Check if near other settler AND sheltered
+    const distToOther = distanceToNearestAgent();
+    const nearOtherAndSheltered = distToOther < 2.5 && (nearHut || nearFire);
+    
+    let comfortChange = 0;
+    
+    // Recovery conditions (priority order)
+    if (veryCloseToHut) {
+      // Inside or very close to hut: strong recovery
+      comfortChange = 0.08 * dt;
+    } else if (nearHut) {
+      // Near hut: good recovery
+      comfortChange = 0.05 * dt;
+    } else if (nearFire) {
+      // Near fire: moderate recovery
+      comfortChange = 0.04 * dt;
+    } else if (nearFurniture) {
+      // Near furniture: small recovery
+      comfortChange = 0.025 * dt;
+    }
+    
+    // Bonus recovery when near other settler and sheltered
+    if (nearOtherAndSheltered) {
+      comfortChange += 0.015 * dt;
+    }
+    
+    // Drain conditions
+    if (isNight && !nearHut && !nearFire) {
+      // Night in the open: significant drain
+      if (!nearBuilding) {
+        // No building nearby: faster drain
+        comfortChange -= 0.025 * dt;
+      } else {
+        // Near some building but not hut/fire: slower drain
+        comfortChange -= 0.02 * dt;
+      }
+    } else if (!isNight && !nearHut && !nearFire && !nearBuilding) {
+      // Day but completely in the open: very slow drain
+      comfortChange -= 0.004 * dt;
+    }
+    
+    // Apply comfort change and clamp
+    state.comfort = Math.max(0, Math.min(1, state.comfort + comfortChange));
   }
 
   
@@ -589,6 +667,27 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         action = ACTION_NAMES.indexOf(name);
       }
     }
+    
+    // Comfort-based behavior modification: seek shelter at night or when comfort is low
+    const isNight = world.worldClock && world.worldClock.time >= 0.7;
+    const needsShelter = (isNight && state.comfort < 0.55) || state.comfort < 0.4;
+    
+    if (needsShelter && state.hunger > 0.45) {
+      // Comfort overrides most actions except critical hunger
+      const hasHutOrFire = s.hasHut || world.buildings.some((b) => b.type === 'fire');
+      
+      if (hasHutOrFire) {
+        const canRemapAction = (name === 'idle' || name === 'eat' || name === 'combine' || 
+                                name === 'process' || name === 'seek_material' || name === 'seek_food');
+        
+        // At night, comfort beats wanderlust
+        if (canRemapAction) {
+          // Will walk to hut/fire in act() phase
+          name = 'idle';
+          action = ACTION_NAMES.indexOf(name);
+        }
+      }
+    }
 
     
     state.actionIndex = action;
@@ -622,6 +721,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     if (state.hunger <= 0.3) {
       state.wantBubble = 'Hungry';
+    } else if ((isNight && state.comfort < 0.55) || state.comfort < 0.4) {
+      // Comfort need shown when low at night or very low anytime
+      if (isNight && !nearHut && !nearFire) {
+        state.wantBubble = 'Cold';
+      } else {
+        state.wantBubble = 'Shelter';
+      }
     } else if (isNight && !nearHut && !nearFire) {
       state.wantBubble = 'Cold';
     } else if (!state.hasTools && state.inventory.ingot >= 2) {
@@ -1398,6 +1504,54 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const actName = state.action;
 
     if (actName === 'idle' || actName === 'idle-hungry') {
+      // Check if we should seek shelter for comfort
+      const isNight = world.worldClock && world.worldClock.time >= 0.7;
+      const needsShelter = (isNight && state.comfort < 0.55) || state.comfort < 0.4;
+      
+      if (needsShelter && state.hunger > 0.45 && !state.sluggish) {
+        // Try to walk to nearest hut or fire
+        const hutBuilding = world.buildings.find((b) => b.type === 'hut');
+        const fireBuilding = world.buildings.find((b) => b.type === 'fire');
+        
+        let targetBuilding = null;
+        let targetDist = Infinity;
+        
+        // Prefer hut at night, otherwise closest shelter
+        if (isNight && hutBuilding) {
+          const dx = hutBuilding.mesh.position.x - group.position.x;
+          const dz = hutBuilding.mesh.position.z - group.position.z;
+          targetDist = Math.hypot(dx, dz);
+          targetBuilding = hutBuilding;
+        } else {
+          // Find closest shelter
+          if (hutBuilding) {
+            const dx = hutBuilding.mesh.position.x - group.position.x;
+            const dz = hutBuilding.mesh.position.z - group.position.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist < targetDist) {
+              targetDist = dist;
+              targetBuilding = hutBuilding;
+            }
+          }
+          if (fireBuilding) {
+            const dx = fireBuilding.mesh.position.x - group.position.x;
+            const dz = fireBuilding.mesh.position.z - group.position.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist < targetDist) {
+              targetDist = dist;
+              targetBuilding = fireBuilding;
+            }
+          }
+        }
+        
+        if (targetBuilding && targetDist > 2.0) {
+          // Walk to shelter
+          const target = getSideSlotTarget(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
+          const remain = walkToward(target.x, target.z, dt, speed);
+          return remain >= 0.5;
+        }
+      }
+      
       return false;
     }
 
@@ -1786,6 +1940,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const m = Math.round(state.entertainment * 100);
     const w = Math.round(state.wanderlust * 100);
     const i = Math.round(state.itch * 100);
+    const c = Math.round(state.comfort * 100);
     if (hud.hungerFill) hud.hungerFill.style.width = `${h}%`;
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
@@ -1804,6 +1959,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (hud.itchFill) hud.itchFill.style.width = `${i}%`;
     if (hud.itchVal) hud.itchVal.textContent = `${i}%`;
     if (hud.itchTag) hud.itchTag.textContent = state.itchTag || 'sharp';
+    
+    if (hud.comfortFill) hud.comfortFill.style.width = `${c}%`;
+    if (hud.comfortVal) hud.comfortVal.textContent = `${c}%`;
     
     // Update this agent's mind status
     if (hud.action) {
@@ -2031,6 +2189,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Itch updates
     updateItch(dt);
+    
+    // Comfort updates
+    updateComfort(dt);
 
     if (!state.busy) {
       state.thinkAcc += dt;

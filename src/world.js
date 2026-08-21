@@ -94,10 +94,11 @@ function makeGroundTexture() {
   return tex;
 }
 
-function createBiomes(scene, seed = Date.now()) {
+function createBiomes(scene, seed = Date.now(), heightAt) {
   const rng = new SeededRandom(seed);
   const fauna = [];
   const forageSources = [];
+  const swayables = []; // Objects that can sway in wind
   
   // Meadow (center/east): grass, berries, rabbits
   const meadowMat = new THREE.MeshStandardMaterial({
@@ -113,7 +114,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.ConeGeometry(0.08, 0.35, 4),
       meadowMat
     );
-    grass.position.set(x, 0.175, z);
+    grass.position.set(x, heightAt(x, z) + 0.175, z);
     grass.rotation.y = rng.next() * Math.PI * 2;
     grass.castShadow = true;
     grass.receiveShadow = true;
@@ -136,7 +137,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(5, 14);
     const z = rng.range(-5, 5);
     const bushGroup = new THREE.Group();
-    bushGroup.position.set(x, 0, z);
+    bushGroup.position.set(x, heightAt(x, z), z);
     
     // Green foliage base
     const bush = new THREE.Mesh(
@@ -167,6 +168,7 @@ function createBiomes(scene, seed = Date.now()) {
     }
     
     scene.add(bushGroup);
+    swayables.push({ mesh: bushGroup, baseRotation: 0, swayAmount: 0.04 });
     forageSources.push({
       mesh: bushGroup,
       type: 'berry',
@@ -192,7 +194,7 @@ function createBiomes(scene, seed = Date.now()) {
     const centerX = rng.range(4, 12);
     const centerZ = rng.range(-4, 4);
     const patchGroup = new THREE.Group();
-    patchGroup.position.set(centerX, 0, centerZ);
+    patchGroup.position.set(centerX, heightAt(centerX, centerZ), centerZ);
     
     // Create a small wheat patch (cluster of stalks)
     for (let j = 0; j < 10; j++) {
@@ -243,7 +245,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(3, 13);
     const z = rng.range(-6, 6);
     const cluster = new THREE.Group();
-    cluster.position.set(x, 0, z);
+    cluster.position.set(x, heightAt(x, z), z);
     
     for (let j = 0; j < 3; j++) {
       const offsetX = (rng.next() - 0.5) * 0.3;
@@ -296,7 +298,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-13, -7);
     const z = rng.range(-5, 5);
     const bush = new THREE.Group();
-    bush.position.set(x, 0, z);
+    bush.position.set(x, heightAt(x, z), z);
     
     // Green foliage
     const foliage = new THREE.Mesh(
@@ -326,6 +328,7 @@ function createBiomes(scene, seed = Date.now()) {
     }
     
     scene.add(bush);
+    swayables.push({ mesh: bush, baseRotation: 0, swayAmount: 0.05 });
     forageSources.push({
       mesh: bush,
       type: 'fruit_bush',
@@ -348,7 +351,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = i < herbCount - 2 ? rng.range(4, 12) : rng.range(-12, -7);
     const z = rng.range(-5, 5);
     const herbPatch = new THREE.Group();
-    herbPatch.position.set(x, 0, z);
+    herbPatch.position.set(x, heightAt(x, z), z);
     
     for (let j = 0; j < 5; j++) {
       const offsetX = (rng.next() - 0.5) * 0.4;
@@ -385,7 +388,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(5, 13);
     const z = rng.range(-4, 4);
     const rabbit = new THREE.Group();
-    rabbit.position.set(x, 0, z);
+    rabbit.position.set(x, heightAt(x, z), z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.18, 4, 8), rabbitMat);
     body.rotation.z = Math.PI / 2;
     body.position.y = 0.15;
@@ -424,7 +427,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-14, -6);
     const z = rng.range(-6, 6);
     const tree = new THREE.Group();
-    tree.position.set(x, 0, z);
+    tree.position.set(x, heightAt(x, z), z);
     const trunk = new THREE.Mesh(
       new THREE.CylinderGeometry(0.18, 0.22, 2.5, 8),
       treeMat
@@ -442,6 +445,7 @@ function createBiomes(scene, seed = Date.now()) {
     foliage.receiveShadow = true;
     tree.add(foliage);
     scene.add(tree);
+    swayables.push({ mesh: tree, baseRotation: 0, swayAmount: 0.03 });
     forageSources.push({
       mesh: tree,
       type: 'tree',
@@ -466,7 +470,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.CylinderGeometry(0.15, 0.18, 1.2, 8),
       logMat
     );
-    log.position.set(x, 0.12, z);
+    log.position.set(x, heightAt(x, z) + 0.12, z);
     log.rotation.z = Math.PI / 2;
     log.rotation.y = rng.next() * Math.PI;
     log.castShadow = true;
@@ -493,7 +497,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = rng.range(-12, -6);
     const z = rng.range(-3, 3);
     const deer = new THREE.Group();
-    deer.position.set(x, 0, z);
+    deer.position.set(x, heightAt(x, z), z);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.45, 4, 8), deerMat);
     body.rotation.z = Math.PI / 2;
     body.position.y = 0.35;
@@ -543,7 +547,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.DodecahedronGeometry(size, 0),
       isOre ? oreMat : rockMat
     );
-    rock.position.set(x, size * 0.6, z);
+    rock.position.set(x, heightAt(x, z) + size * 0.6, z);
     rock.rotation.set(rng.next(), rng.next(), rng.next());
     rock.castShadow = true;
     rock.receiveShadow = true;
@@ -573,7 +577,7 @@ function createBiomes(scene, seed = Date.now()) {
     new THREE.CircleGeometry(5.5, 24),
     waterMat
   );
-  pond.position.set(pondX, 0.03, pondZ);
+  pond.position.set(pondX, heightAt(pondX, pondZ) + 0.03, pondZ);
   pond.rotation.x = -Math.PI / 2;
   pond.receiveShadow = true;
   scene.add(pond);
@@ -592,7 +596,7 @@ function createBiomes(scene, seed = Date.now()) {
       new THREE.CylinderGeometry(0.04, 0.03, 0.8, 5),
       reedMat
     );
-    reed.position.set(x, 0.4, z);
+    reed.position.set(x, heightAt(x, z) + 0.4, z);
     reed.castShadow = true;
     reed.receiveShadow = true;
     scene.add(reed);
@@ -615,7 +619,7 @@ function createBiomes(scene, seed = Date.now()) {
     const x = pondX + Math.cos(angle) * r;
     const z = pondZ + Math.sin(angle) * r;
     const fish = new THREE.Group();
-    fish.position.set(x, 0.12, z);
+    fish.position.set(x, heightAt(x, z) + 0.12, z);
     
     // Larger, more visible body
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.32, 4, 8), fishMat);
@@ -666,7 +670,7 @@ function createBiomes(scene, seed = Date.now()) {
     const z = pondZ + Math.sin(angle) * r;
     // Invisible marker for water gathering
     const waterNode = new THREE.Group();
-    waterNode.position.set(x, 0, z);
+    waterNode.position.set(x, heightAt(x, z), z);
     scene.add(waterNode);
     forageSources.push({
       mesh: waterNode,
@@ -679,7 +683,7 @@ function createBiomes(scene, seed = Date.now()) {
     });
   }
   
-  return { fauna, forageSources, seed };
+  return { fauna, forageSources, seed, swayables };
 }
 
 export function dressWorld(world, assets) {
@@ -790,13 +794,70 @@ export function createWorld(canvas, seed = null) {
   moon.castShadow = false;
   scene.add(moon);
 
+  // Deterministic height function (shared by mesh and sampling)
+  const seedOffset = worldSeed * 0.001;
+  function heightAt(x, z) {
+    const biome = getBiomeAt(x, z);
+    
+    // Deterministic noise using seed offset
+    const noiseX = Math.sin(x * 0.3 + seedOffset) * Math.cos(z * 0.25 + seedOffset * 1.3);
+    const noiseZ = Math.cos(x * 0.25 + seedOffset * 1.7) * Math.sin(z * 0.3 + seedOffset * 2.1);
+    const noise = (noiseX + noiseZ) * 0.5;
+    
+    if (biome === 'water') {
+      return -0.3 - noise * 0.15;
+    } else if (biome === 'rock') {
+      return 0.4 + noise * 0.6;
+    } else if (biome === 'forest') {
+      return 0.1 + noise * 0.35;
+    } else {
+      return 0.02 + noise * 0.12;
+    }
+  }
+  
+  // Create heightmap terrain using heightAt
+  const groundSize = 90;
+  const groundSegments = 80;
+  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, groundSegments, groundSegments);
+  
+  const positions = groundGeometry.attributes.position.array;
+  const colors = new Float32Array(positions.length);
+  
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const z = positions[i + 1];
+    
+    const biome = getBiomeAt(x, z);
+    const height = heightAt(x, z);
+    
+    let r = 0.54, g = 0.60, b = 0.48;
+    if (biome === 'water') {
+      r = 0.35; g = 0.55; b = 0.50;
+    } else if (biome === 'rock') {
+      r = 0.48; g = 0.48; b = 0.44;
+    } else if (biome === 'forest') {
+      r = 0.35; g = 0.50; b = 0.32;
+    } else {
+      r = 0.54; g = 0.60; b = 0.48;
+    }
+    
+    positions[i + 2] = height;
+    colors[i] = r;
+    colors[i + 1] = g;
+    colors[i + 2] = b;
+  }
+  
+  groundGeometry.attributes.position.needsUpdate = true;
+  groundGeometry.computeVertexNormals();
+  groundGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  
   const groundMat = new THREE.MeshStandardMaterial({
     map: makeGroundTexture(),
-    color: '#8a9a7a',
+    vertexColors: true,
     roughness: 0.95,
     metalness: 0,
   });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), groundMat);
+  const ground = new THREE.Mesh(groundGeometry, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   ground.name = 'ground';
@@ -809,7 +870,7 @@ export function createWorld(canvas, seed = null) {
   scene.add(grid);
 
   // Biome setup - 4 distinct zones with seeded randomization
-  const biomes = createBiomes(scene, worldSeed);
+  const biomes = createBiomes(scene, worldSeed, heightAt);
 
   // Dedicated invisible plane so drops always raycast, even if grid/ground change.
   const dropPlane = new THREE.Mesh(
@@ -830,6 +891,88 @@ export function createWorld(canvas, seed = null) {
   const buildings = [];
   const fauna = biomes.fauna;
   const forageSources = biomes.forageSources;
+  const swayables = biomes.swayables || []; // Trees and bushes that can sway
+  
+  // Weather system
+  const WEATHER_STATES = ['clear', 'wind', 'rain'];
+  const weather = {
+    current: 'clear',
+    timer: 0,
+    duration: 60 + Math.random() * 90, // 60-150 seconds per state
+    transitionT: 0,
+    transitionDuration: 5.0, // 5 second transition
+    rainParticles: null, // Will hold rain particle system
+  };
+  
+  // Create rain particle system
+  function createRainParticles() {
+    const particleCount = 800;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      positions[i] = (Math.random() - 0.5) * 100;
+      positions[i + 1] = Math.random() * 40;
+      positions[i + 2] = (Math.random() - 0.5) * 100;
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    
+    const material = new THREE.PointsMaterial({
+      color: 0x8899aa,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.4,
+    });
+    
+    const particles = new THREE.Points(geometry, material);
+    particles.name = 'rain';
+    return particles;
+  }
+  
+  weather.rainParticles = createRainParticles();
+  weather.rainParticles.visible = false;
+  scene.add(weather.rainParticles);
+  
+  function updateWeather(dt) {
+    weather.timer += dt;
+    
+    // Transition time
+    if (weather.transitionT < weather.transitionDuration) {
+      weather.transitionT += dt;
+    }
+    
+    // Switch weather state
+    if (weather.timer >= weather.duration) {
+      weather.timer = 0;
+      weather.transitionT = 0;
+      weather.duration = 60 + Math.random() * 90;
+      
+      // Pick next state (not same as current)
+      const otherStates = WEATHER_STATES.filter(s => s !== weather.current);
+      weather.current = otherStates[Math.floor(Math.random() * otherStates.length)];
+    }
+    
+    // Animate rain particles
+    if (weather.current === 'rain') {
+      weather.rainParticles.visible = true;
+      const positions = weather.rainParticles.geometry.attributes.position.array;
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] -= dt * 15; // Fall speed
+        if (positions[i + 1] < 0) {
+          positions[i + 1] = 40; // Reset to top
+          positions[i] = (Math.random() - 0.5) * 100;
+          positions[i + 2] = (Math.random() - 0.5) * 100;
+        }
+      }
+      weather.rainParticles.geometry.attributes.position.needsUpdate = true;
+    } else {
+      weather.rainParticles.visible = false;
+    }
+    
+    // Wind sway for trees and bushes (stored for updateDayNight)
+    weather.windSwayPhase = (weather.windSwayPhase || 0) + dt * 0.8;
+  }
   
   // Day/night cycle (4-5 minutes real time: 70% day, 30% night)
   const DAY_LENGTH = 270; // seconds total (4.5 minutes)
@@ -841,6 +984,8 @@ export function createWorld(canvas, seed = null) {
   };
   
   function updateDayNight(dt) {
+    updateWeather(dt); // Update weather alongside day/night
+    
     worldClock.time += dt / DAY_LENGTH;
     if (worldClock.time >= 1) {
       worldClock.time -= 1;
@@ -858,63 +1003,95 @@ export function createWorld(canvas, seed = null) {
     }
     worldClock.lastIsNight = isNight;
     
-    // Sky colors
+    // Weather modifiers
+    const isRain = weather.current === 'rain';
+    const isWind = weather.current === 'wind';
+    let skyDimming = 1.0;
+    let hemiDimming = 1.0;
+    
+    if (isRain) {
+      skyDimming = 0.6; // Darker sky in rain
+      hemiDimming = 0.7;
+    } else if (isWind) {
+      skyDimming = 1.1; // Slightly brighter/dustier
+      hemiDimming = 1.05;
+    }
+    
+    // Sky colors with weather
     const skyMat = sky.material;
     if (isNight) {
       // Night: dark blue sky
-      const nightBlend = Math.min(1, nightT * 3); // Quick transition into night
-      skyMat.uniforms.topColor.value.lerp(new THREE.Color('#1a2440'), nightBlend * 0.3);
-      skyMat.uniforms.bottomColor.value.lerp(new THREE.Color('#2a3550'), nightBlend * 0.3);
+      const nightBlend = Math.min(1, nightT * 3);
+      const nightTop = new THREE.Color('#1a2440').multiplyScalar(skyDimming);
+      const nightBottom = new THREE.Color('#2a3550').multiplyScalar(skyDimming);
+      skyMat.uniforms.topColor.value.lerp(nightTop, nightBlend * 0.3);
+      skyMat.uniforms.bottomColor.value.lerp(nightBottom, nightBlend * 0.3);
     } else if (dayT > 0.85) {
       // Dusk
       const duskT = (dayT - 0.85) / 0.15;
-      skyMat.uniforms.topColor.value.lerpColors(
-        new THREE.Color('#6d86a0'),
-        new THREE.Color('#8a5a4a'),
-        duskT
-      );
-      skyMat.uniforms.bottomColor.value.lerpColors(
-        new THREE.Color('#e2d3b4'),
-        new THREE.Color('#d4845a'),
-        duskT
-      );
+      const duskTop = new THREE.Color('#6d86a0').lerp(new THREE.Color('#8a5a4a'), duskT).multiplyScalar(skyDimming);
+      const duskBottom = new THREE.Color('#e2d3b4').lerp(new THREE.Color('#d4845a'), duskT).multiplyScalar(skyDimming);
+      skyMat.uniforms.topColor.value.lerp(duskTop, 0.1);
+      skyMat.uniforms.bottomColor.value.lerp(duskBottom, 0.1);
     } else {
-      // Day
-      skyMat.uniforms.topColor.value.lerp(new THREE.Color('#6d86a0'), 0.1);
-      skyMat.uniforms.bottomColor.value.lerp(new THREE.Color('#e2d3b4'), 0.1);
+      // Day with weather
+      let dayTop = new THREE.Color('#6d86a0');
+      let dayBottom = new THREE.Color('#e2d3b4');
+      
+      if (isRain) {
+        dayTop = new THREE.Color('#5a6a80');
+        dayBottom = new THREE.Color('#b8b0a0');
+      } else if (isWind) {
+        dayTop = new THREE.Color('#7d96b0');
+        dayBottom = new THREE.Color('#ead8c4');
+      }
+      
+      skyMat.uniforms.topColor.value.lerp(dayTop, 0.1);
+      skyMat.uniforms.bottomColor.value.lerp(dayBottom, 0.1);
     }
     
-    // Fog colors
+    // Fog colors with weather
     if (isNight) {
-      scene.fog.color.lerp(new THREE.Color('#1a2030'), 0.05);
+      scene.fog.color.lerp(new THREE.Color('#1a2030').multiplyScalar(skyDimming), 0.05);
     } else if (dayT > 0.85) {
       const duskT = (dayT - 0.85) / 0.15;
-      scene.fog.color.lerpColors(
-        new THREE.Color('#c9bea6'),
-        new THREE.Color('#7a5a4a'),
-        duskT
-      );
+      const duskFog = new THREE.Color('#c9bea6').lerp(new THREE.Color('#7a5a4a'), duskT);
+      scene.fog.color.lerp(duskFog, 0.05);
     } else {
-      scene.fog.color.lerp(new THREE.Color('#c9bea6'), 0.05);
+      let dayFog = new THREE.Color('#c9bea6');
+      if (isRain) dayFog = new THREE.Color('#a8a098');
+      scene.fog.color.lerp(dayFog, 0.05);
     }
     
-    // Sun and moon
+    // Sun and moon with weather
     if (isNight) {
-      sun.intensity = Math.max(0, 1.35 * (1 - nightT * 2));
-      moon.intensity = Math.min(0.25, nightT * 0.5);
-      hemi.intensity = Math.max(0.2, 0.85 - nightT * 0.65);
+      sun.intensity = Math.max(0, 1.35 * (1 - nightT * 2)) * skyDimming;
+      moon.intensity = Math.min(0.25, nightT * 0.5) * skyDimming;
+      hemi.intensity = Math.max(0.2, 0.85 - nightT * 0.65) * hemiDimming;
     } else if (dayT > 0.85) {
       const duskT = (dayT - 0.85) / 0.15;
-      sun.intensity = 1.35 * (1 - duskT * 0.6);
+      sun.intensity = 1.35 * (1 - duskT * 0.6) * skyDimming;
       moon.intensity = 0;
-      hemi.intensity = 0.85 - duskT * 0.3;
+      hemi.intensity = (0.85 - duskT * 0.3) * hemiDimming;
     } else {
-      sun.intensity = 1.35;
+      sun.intensity = 1.35 * skyDimming;
       moon.intensity = 0;
-      hemi.intensity = 0.85;
+      hemi.intensity = 0.85 * hemiDimming;
     }
     
-    renderer.toneMappingExposure = isNight ? 0.7 : 1.05;
+    renderer.toneMappingExposure = isNight ? 0.7 : (isRain ? 0.9 : 1.05);
+    
+    // Wind sway for trees/bushes
+    if (isWind) {
+      const swayAngle = Math.sin(weather.windSwayPhase || 0) * 0.08;
+      for (const obj of swayables) {
+        obj.mesh.rotation.z = obj.baseRotation + swayAngle * obj.swayAmount;
+      }
+    } else {
+      for (const obj of swayables) {
+        obj.mesh.rotation.z = obj.baseRotation;
+      }
+    }
   }
 
   function onResize() {
@@ -934,15 +1111,50 @@ export function createWorld(canvas, seed = null) {
     buildings,
     fauna,
     forageSources,
+    swayables,
     sun,
     moon,
     hemi,
     sky,
     seed: worldSeed,
     worldClock,
+    weather,
+    heightAt,
+    getBiomeAt,
     updateDayNight,
     render() {
       renderer.render(scene, camera);
     },
   };
+}
+
+// Export getBiomeAt for use in agent.js
+export function getBiomeAt(x, z) {
+  // Biome layout:
+  // meadow: x in [3, 13], z in [-6, 6] (east/center)
+  // forest: x in [-14, -6], z in [-6, 6] (west)
+  // rock: x in [-6, 6], z in [7, 15] (south)
+  // water: around x in [-3, -1], z in [-12, -10] (north, pond center ~5.5 radius)
+  
+  const pondCenterX = -2;
+  const pondCenterZ = -11;
+  const pondRadius = 6.5;
+  
+  const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
+  if (distToPond < pondRadius) return 'water';
+  
+  if (z >= 7 && z <= 15 && x >= -6 && x <= 6) return 'rock';
+  if (x >= -14 && x <= -6 && z >= -6 && z <= 6) return 'forest';
+  if (x >= 3 && x <= 13 && z >= -6 && z <= 6) return 'meadow';
+  
+  // Default to closest biome edge
+  const distToMeadow = Math.max(0, Math.max(3 - x, x - 13), Math.max(-6 - z, z - 6));
+  const distToForest = Math.max(0, Math.max(-14 - x, x - (-6)), Math.max(-6 - z, z - 6));
+  const distToRock = Math.max(0, Math.max(-6 - x, x - 6), Math.max(7 - z, z - 15));
+  
+  const minDist = Math.min(distToMeadow, distToForest, distToRock, distToPond);
+  if (minDist === distToMeadow) return 'meadow';
+  if (minDist === distToForest) return 'forest';
+  if (minDist === distToRock) return 'rock';
+  return 'water';
 }

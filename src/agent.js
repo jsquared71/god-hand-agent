@@ -592,7 +592,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else if (winner === 'health') {
       if (hasAnyMedicine(s)) {
         name = 'use_medicine';
-        action = ACTION_NAMES.indexOf('use_medicine');
+        action = 0;
       } else {
         const hasHerbOrMushroom = (state.inventory.herb || 0) > 0 || (state.inventory.mushroom || 0) > 0;
         const canGatherHerb = s.forageFood.item && s.forageFood.item.harvestType === 'herb';
@@ -764,13 +764,22 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       }
     }
     
-    // Survive drives can override commit if clearly higher
-    if (state.driveCommit && state.driveCommit !== winner) {
-      const surviveOverride = ['hunger', 'health', 'comfort'];
-      if (surviveOverride.includes(winner) && scores[winner] > scores[state.driveCommit] + 0.2) {
+    // Survive drives can override commit
+    if (state.driveCommit && state.driveCommit !== winner && state.driveCommitT > 0) {
+      const surviveWinner = ['hunger', 'health'];
+      const surviveCommit = ['hunger', 'health', 'comfort'];
+      
+      // If new winner is hunger/health and score >= committed, always switch
+      if (surviveWinner.includes(winner) && scores[winner] >= scores[state.driveCommit]) {
         winner = winner;
-      } else if (surviveOverride.includes(state.driveCommit) && state.driveCommitT > 0) {
-        winner = state.driveCommit;
+      }
+      // If committed is survive and new winner is not hunger/health, require +0.2 to break
+      else if (surviveCommit.includes(state.driveCommit) && !surviveWinner.includes(winner)) {
+        if (scores[winner] > scores[state.driveCommit] + 0.2) {
+          winner = winner;
+        } else {
+          winner = state.driveCommit;
+        }
       }
     }
     

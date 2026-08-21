@@ -984,6 +984,7 @@ export class AssetLibrary {
       this.tryLoad('herb'),
       this.tryLoad('rabbit'),
       this.tryLoad('deer'),
+      this.tryLoad('fish'),
     ]);
     
     // Try loading agent animation clips if agent was loaded from GLB
@@ -1034,10 +1035,13 @@ export class AssetLibrary {
       const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
       const root = gltf.scene || gltf.scenes[0];
       
-      // Special handling for agent: wrap instead of scaling directly
-      if (id === 'agent') {
+      const isFauna = ['rabbit', 'deer', 'fish'].includes(id);
+      const needsWrapping = id === 'agent' || isFauna;
+      
+      // Wrap agent and fauna to avoid scaling the armature
+      if (needsWrapping && this.hasSkinningOrBones(root)) {
         const wrapper = new THREE.Group();
-        wrapper.name = 'agentWrapper';
+        wrapper.name = id === 'agent' ? 'agentWrapper' : `${id}Wrapper`;
         
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
@@ -1054,7 +1058,7 @@ export class AssetLibrary {
           wrapper.position.y -= box2.min.y;
         }
         
-        // Fix agent materials: remove emissive and recolor albedo
+        // Fix materials: zero emissive for fauna (agent needs recoloring too)
         wrapper.traverse((o) => {
           if (o.isMesh) {
             o.castShadow = true;
@@ -1063,19 +1067,19 @@ export class AssetLibrary {
             if (o.material) {
               const mat = o.material;
               
-              // 1. Zero emissive (was [1,1,1] making it full-bright neon)
+              // Zero emissive
               if (mat.emissive) {
                 mat.emissive.setRGB(0, 0, 0);
               }
               mat.emissiveIntensity = 0;
               
-              // 2. Drop emissiveMap (was same atlas as baseColor)
+              // Drop emissiveMap
               if (mat.emissiveMap) {
                 mat.emissiveMap = null;
               }
               
-              // 3. Recolor albedo map: lime/yellow → teal, orange → tan
-              if (mat.map) {
+              // Recolor agent only
+              if (id === 'agent' && mat.map) {
                 const recoloredMap = recolorAgentTexture(mat.map);
                 mat.map = recoloredMap;
                 mat.needsUpdate = true;
@@ -1095,7 +1099,7 @@ export class AssetLibrary {
         return wrapper;
       }
       
-      // For non-agent assets, use normal centerAndScale
+      // For non-skeletal assets, use normal centerAndScale
       centerAndScale(root, id);
       root.userData.fromGltf = true;
       
@@ -1122,41 +1126,61 @@ export class AssetLibrary {
       const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
       const root = gltf.scene || gltf.scenes[0];
       
-      // Special handling for agent: wrap instead of scaling directly
-      // This preserves the armature's original space for Mixamo clips
-      if (id === 'agent') {
+      const isFauna = ['rabbit', 'deer', 'fish'].includes(id);
+      const needsWrapping = id === 'agent' || isFauna;
+      
+      // Wrap agent and fauna to avoid scaling the armature
+      if (needsWrapping && this.hasSkinningOrBones(root)) {
         const wrapper = new THREE.Group();
-        wrapper.name = 'agentWrapper';
+        wrapper.name = id === 'agent' ? 'agentWrapper' : `${id}Wrapper`;
         
-        // Calculate scale without modifying the armature
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
         const target = TARGET_SIZE[id] ?? 1;
         const scale = target / maxDim;
         
-        // Add armature to wrapper and scale the wrapper
         wrapper.add(root);
         wrapper.scale.setScalar(scale);
         
-        // Sit wrapper on ground
         wrapper.updateMatrixWorld(true);
         const box2 = new THREE.Box3().setFromObject(wrapper);
         if (Number.isFinite(box2.min.y)) {
           wrapper.position.y -= box2.min.y;
         }
         
-        // Enable shadows on the wrapper's contents
+        // Fix materials: zero emissive for fauna (agent needs recoloring too)
         wrapper.traverse((o) => {
           if (o.isMesh) {
             o.castShadow = true;
             o.receiveShadow = true;
+            
+            if (o.material) {
+              const mat = o.material;
+              
+              // Zero emissive
+              if (mat.emissive) {
+                mat.emissive.setRGB(0, 0, 0);
+              }
+              mat.emissiveIntensity = 0;
+              
+              // Drop emissiveMap
+              if (mat.emissiveMap) {
+                mat.emissiveMap = null;
+              }
+              
+              // Recolor agent only
+              if (id === 'agent' && mat.map) {
+                const recoloredMap = recolorAgentTexture(mat.map);
+                mat.map = recoloredMap;
+                mat.needsUpdate = true;
+              }
+            }
           }
         });
         
         wrapper.userData.fromGltf = true;
         
-        // Store animations if present
         if (gltf.animations && gltf.animations.length > 0) {
           wrapper.userData.clips = gltf.animations;
         }
@@ -1166,7 +1190,7 @@ export class AssetLibrary {
         return wrapper;
       }
       
-      // For non-agent assets, use normal centerAndScale
+      // For non-skeletal assets, use normal centerAndScale
       centerAndScale(root, id);
       root.userData.fromGltf = true;
       
@@ -1208,6 +1232,42 @@ export class AssetLibrary {
     
     // Copy userData
     clone.userData.fromGltf = !!proto.userData.fromGltf;
+    
+    const isFauna = ['rabbit', 'deer', 'fish'].includes(id);
+    
+    // For fauna with clips: copy clips, attach mixer, play first clip
+    if (isFauna && proto.userData.clips && proto.userData.clips.length > 0) {
+      clone.userData.clips = proto.userData.clips;
+      
+      // Create mixer and play first matching clip
+      const mixer = new THREE.AnimationMixer(clone);
+      const clips = proto.userData.clips;
+      const clipNames = ['hop', 'walk', 'swim'];
+      let clipToPlay = clips.find(c => clipNames.includes(c.name));
+      if (!clipToPlay) clipToPlay = clips[0];
+      
+      if (clipToPlay) {
+        const action = mixer.clipAction(clipToPlay);
+        action.setLoop(THREE.LoopRepeat);
+        action.play();
+      }
+      
+      clone.userData.mixer = mixer;
+      
+      // Zero emissive on cloned materials
+      clone.traverse((o) => {
+        if (o.isMesh && o.material) {
+          const mat = o.material;
+          if (mat.emissive) {
+            mat.emissive.setRGB(0, 0, 0);
+          }
+          mat.emissiveIntensity = 0;
+          if (mat.emissiveMap) {
+            mat.emissiveMap = null;
+          }
+        }
+      });
+    }
     
     // For agent: attach animation clips and setup for mixer
     if (id === 'agent' && proto.userData.animationClips) {

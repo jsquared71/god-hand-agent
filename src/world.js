@@ -757,6 +757,15 @@ export function dressWorld(world, assets) {
       newMesh.position.copy(pos);
       newMesh.rotation.y = yaw;
       newMesh.userData.fromGltf = true;
+      
+      // Reset Y position based on biome
+      if (animal.biome === 'water') {
+        newMesh.position.y = POND_SPEC.surfaceY;
+      } else {
+        const groundY = world.heightAt ? world.heightAt(pos.x, pos.z) : 0;
+        newMesh.position.y = groundY;
+      }
+      
       world.scene.add(newMesh);
       
       animal.mesh = newMesh;

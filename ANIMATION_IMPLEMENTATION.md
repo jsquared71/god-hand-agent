@@ -17,10 +17,12 @@ This implementation adds THREE.AnimationMixer support for Meshy settler meshes (
 - **Storage**: Clips stored in proto's `userData.animationClips` as `{ idle: [...], walk: [...], work: [...] }`
 
 #### Skeleton Cloning
-- **Import**: `import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js'`
+- **Import**: `import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js'`
+  - ⚠️ **IMPORTANT**: Must use namespace import in three@0.170
+  - Named exports (`import { clone }`) will throw and kill the game
 - **Detection**: `hasSkinningOrBones()` traverses mesh to detect `isSkinnedMesh` or `isBone`
 - **Cloning strategy**:
-  - Skinned meshes (GLB with bones) → `skeletonClone(proto)`
+  - Skinned meshes (GLB with bones) → `SkeletonUtils.clone(proto)`
   - Other meshes → `proto.clone(true)`
 - **Result**: Each agent (Ava and Bo) gets independent skeleton and mixer
 
@@ -144,7 +146,7 @@ If `!state.mixer || Object.keys(state.actions).length === 0`:
 ## Code Locations
 
 ### Assets (`src/assets.js`)
-- Lines 3: Import SkeletonUtils
+- Lines 3: Import SkeletonUtils (namespace import: `import * as SkeletonUtils`)
 - Lines 900-949: `loadAgentAnimations()` method
 - Lines 1006-1046: `create()` with skeleton cloning
 - Lines 1048-1055: `hasSkinningOrBones()` helper

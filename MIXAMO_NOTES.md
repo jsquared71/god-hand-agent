@@ -68,18 +68,21 @@ if (gltf.animations && gltf.animations.length > 0) {
 
 ### Skeleton Cloning
 ```javascript
-import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // For each agent instance (Ava and Bo)
-const clone = skeletonClone(proto);
+const clone = SkeletonUtils.clone(proto);
 // Each clone gets independent skeleton with same 24 joints
 ```
 
 ### Why SkeletonUtils.clone?
 - `Object3D.clone()` shares skeleton references
 - Multiple agents would deform each other
-- `skeletonClone()` deep-clones bones and updates skinning
+- `SkeletonUtils.clone()` deep-clones bones and updates skinning
 - Result: Ava and Bo have independent skeletons
+
+**IMPORTANT:** Must use namespace import `import * as SkeletonUtils` in three@0.170.
+Named exports like `import { clone }` will throw and kill the game.
 
 ### Animation Mixer Setup
 ```javascript

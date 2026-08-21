@@ -948,9 +948,27 @@ export function createWorld(canvas, seed = null) {
       weather.transitionT = 0;
       weather.duration = 60 + Math.random() * 90;
       
+      const previousWeather = weather.current;
+      
       // Pick next state (not same as current)
       const otherStates = WEATHER_STATES.filter(s => s !== weather.current);
       weather.current = otherStates[Math.floor(Math.random() * otherStates.length)];
+      
+      // Start/stop audio loops based on weather change
+      import('./audio.js').then(({ startRain, stopRain, startWind, stopWind }) => {
+        if (previousWeather === 'rain' && weather.current !== 'rain') {
+          stopRain();
+        }
+        if (previousWeather === 'wind' && weather.current !== 'wind') {
+          stopWind();
+        }
+        if (weather.current === 'rain' && previousWeather !== 'rain') {
+          startRain();
+        }
+        if (weather.current === 'wind' && previousWeather !== 'wind') {
+          startWind();
+        }
+      });
     }
     
     // Animate rain particles

@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 
+// Shared pond specification
+const POND_SPEC = {
+  centerX: -2,
+  centerZ: -11,
+  basinRadius: 6.5,
+  waterRadius: 5.8,
+  floorY: -0.50,
+  surfaceY: -0.05,
+};
+
 // Seeded RNG (simple LCG)
 class SeededRandom {
   constructor(seed) {
@@ -564,20 +574,22 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
   }
   
   // Water biome (north): pond, reeds, fish
-  const pondX = rng.range(-3, -1);
-  const pondZ = rng.range(-12, -10);
   const waterMat = new THREE.MeshStandardMaterial({
     color: '#4a7aa8',
     roughness: 0.15,
     metalness: 0.3,
     transparent: true,
     opacity: 0.85,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const pond = new THREE.Mesh(
-    new THREE.CircleGeometry(5.5, 24),
+    new THREE.CircleGeometry(POND_SPEC.waterRadius, 24),
     waterMat
   );
-  pond.position.set(pondX, heightAt(pondX, pondZ) + 0.03, pondZ);
+  pond.position.set(POND_SPEC.centerX, POND_SPEC.surfaceY, POND_SPEC.centerZ);
   pond.rotation.x = -Math.PI / 2;
   pond.receiveShadow = true;
   scene.add(pond);
@@ -589,9 +601,9 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
   });
   for (let i = 0; i < 12; i++) {
     const angle = (i / 12) * Math.PI * 2;
-    const r = 4.8 + rng.next() * 0.8;
-    const x = pondX + Math.cos(angle) * r;
-    const z = pondZ + Math.sin(angle) * r;
+    const r = POND_SPEC.waterRadius + rng.next() * 0.4;
+    const x = POND_SPEC.centerX + Math.cos(angle) * r;
+    const z = POND_SPEC.centerZ + Math.sin(angle) * r;
     const reed = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.03, 0.8, 5),
       reedMat
@@ -615,11 +627,11 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
   const fishCount = rng.int(5, 8);
   for (let i = 0; i < fishCount; i++) {
     const angle = (i / fishCount) * Math.PI * 2 + rng.next();
-    const r = 2 + rng.next() * 2.5;
-    const x = pondX + Math.cos(angle) * r;
-    const z = pondZ + Math.sin(angle) * r;
+    const r = 1.5 + rng.next() * 3.5;
+    const x = POND_SPEC.centerX + Math.cos(angle) * r;
+    const z = POND_SPEC.centerZ + Math.sin(angle) * r;
     const fish = new THREE.Group();
-    fish.position.set(x, heightAt(x, z) + 0.12, z);
+    fish.position.set(x, POND_SPEC.surfaceY + 0.08, z);
     
     // Larger, more visible body
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.32, 4, 8), fishMat);
@@ -643,7 +655,12 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
     const fishFauna = {
       mesh: fish,
       biome: 'water',
-      bounds: { minX: pondX - 5, maxX: pondX + 5, minZ: pondZ - 5, maxZ: pondZ + 5 },
+      bounds: { 
+        minX: POND_SPEC.centerX - POND_SPEC.waterRadius, 
+        maxX: POND_SPEC.centerX + POND_SPEC.waterRadius, 
+        minZ: POND_SPEC.centerZ - POND_SPEC.waterRadius, 
+        maxZ: POND_SPEC.centerZ + POND_SPEC.waterRadius 
+      },
       speed: 0.6,
       dir: rng.next() * Math.PI * 2,
       hopPhase: 0,
@@ -655,7 +672,7 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
       type: 'fish',
       harvestType: 'fish',
       cooldown: 0,
-      cooldownMax: 60.0, // 60s per charge regeneration (slowest - fish take time to "respawn")
+      cooldownMax: 60.0,
       charges: 1,
       chargesMax: 1,
       fauna: fishFauna,
@@ -665,10 +682,9 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
   // Water gathering points around pond edge
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2 + Math.PI / 8;
-    const r = 4.2; // Just inside the reeds
-    const x = pondX + Math.cos(angle) * r;
-    const z = pondZ + Math.sin(angle) * r;
-    // Invisible marker for water gathering
+    const r = POND_SPEC.waterRadius - 0.5;
+    const x = POND_SPEC.centerX + Math.cos(angle) * r;
+    const z = POND_SPEC.centerZ + Math.sin(angle) * r;
     const waterNode = new THREE.Group();
     waterNode.position.set(x, heightAt(x, z), z);
     scene.add(waterNode);
@@ -677,7 +693,7 @@ function createBiomes(scene, seed = Date.now(), heightAt) {
       type: 'water_source',
       harvestType: 'water',
       cooldown: 0,
-      cooldownMax: 25.0, // 25s per charge regeneration
+      cooldownMax: 25.0,
       charges: 3,
       chargesMax: 3,
     });
@@ -807,7 +823,15 @@ export function createWorld(canvas, seed = null) {
     const noise = (noiseX + noiseZ) * 0.5;
     
     if (biome === 'water') {
-      return -0.3 - noise * 0.15;
+      // Smooth bowl instead of flat crater
+      const dx = x - POND_SPEC.centerX;
+      const dz = z - POND_SPEC.centerZ;
+      const distFromCenter = Math.sqrt(dx * dx + dz * dz);
+      const t = distFromCenter / POND_SPEC.basinRadius;
+      // Smoothstep from floor to rim
+      const smoothT = t * t * (3 - 2 * t);
+      const rimHeight = 0.02 + noise * 0.12;
+      return POND_SPEC.floorY + smoothT * (rimHeight - POND_SPEC.floorY);
     } else if (biome === 'rock') {
       return 0.4 + noise * 0.6;
     } else if (biome === 'forest') {
@@ -1196,14 +1220,10 @@ export function getBiomeAt(x, z) {
   // meadow: x in [3, 13], z in [-6, 6] (east/center)
   // forest: x in [-14, -6], z in [-6, 6] (west)
   // rock: x in [-6, 6], z in [7, 15] (south)
-  // water: around x in [-3, -1], z in [-12, -10] (north, pond center ~5.5 radius)
+  // water: around x = -2, z = -11 (north, pond center, basin radius 6.5)
   
-  const pondCenterX = -2;
-  const pondCenterZ = -11;
-  const pondRadius = 6.5;
-  
-  const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
-  if (distToPond < pondRadius) return 'water';
+  const distToPond = Math.hypot(x - POND_SPEC.centerX, z - POND_SPEC.centerZ);
+  if (distToPond < POND_SPEC.basinRadius) return 'water';
   
   if (z >= 7 && z <= 15 && x >= -6 && x <= 6) return 'rock';
   if (x >= -14 && x <= -6 && z >= -6 && z <= 6) return 'forest';

@@ -1,6 +1,17 @@
 import * as THREE from 'three';
+import { getBiomeAt } from './world.js';
 
 let nextId = 1;
+
+// Pond spec (matches world.js)
+const POND_SPEC = {
+  centerX: -2,
+  centerZ: -11,
+  basinRadius: 6.5,
+  waterRadius: 5.8,
+  floorY: -0.50,
+  surfaceY: -0.05,
+};
 
 export function spawnPickup(world, assets, type, position, { falling = true, isWorldSpawned = false, spawnOrigin = null } = {}) {
   const mesh = assets.create(type);
@@ -280,9 +291,9 @@ export function updateWorldItems(world, dt) {
       const groundY = world.heightAt ? world.heightAt(creature.mesh.position.x, creature.mesh.position.z) : 0;
       
       if (creature.swimPhase !== undefined) {
-        // Fish: swim slightly above pond floor with gentle bob (never below groundY)
+        // Fish: swim at water surface with gentle bob
         creature.swimPhase += dt * 3;
-        creature.mesh.position.y = groundY + 0.08 + Math.sin(creature.swimPhase) * 0.04;
+        creature.mesh.position.y = POND_SPEC.surfaceY + 0.08 + Math.sin(creature.swimPhase) * 0.04;
       } else {
         // Land animals: hop on the ground
         creature.mesh.position.y = groundY + Math.abs(Math.sin(creature.hopPhase)) * 0.08;

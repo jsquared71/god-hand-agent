@@ -66,6 +66,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     name,
     hunger: 0.62,
     energy: 1,
+    entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
     inventory: emptyInventory(),
     hasTools: false,
     bestGatherMult: 1.0,
@@ -86,6 +87,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     currentAction: null,
     lastForageSource: null, // Track last forage source to encourage variety
     lastBusyKind: null, // Track last busy kind to avoid immediate repetition
+    lastPosition: { x: 0, z: 0 }, // Track position for walk distance
+    distanceTraveled: 0, // Track travel distance for entertainment
   };
 
   const hud = {
@@ -93,6 +96,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     hungerVal: document.getElementById(`${name.toLowerCase()}-hunger-val`),
     energyFill: document.getElementById(`${name.toLowerCase()}-energy-fill`),
     energyVal: document.getElementById(`${name.toLowerCase()}-energy-val`),
+    moodFill: document.getElementById(`${name.toLowerCase()}-mood-fill`),
+    moodVal: document.getElementById(`${name.toLowerCase()}-mood-val`),
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
@@ -110,6 +115,24 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   function fireNear() {
     const { item, dist } = nearestBuilding(world, group.position, 'fire');
     return dist < FIRE_RADIUS ? item : null;
+  }
+  
+  function distanceToNearestAgent() {
+    if (!world.agents || world.agents.length <= 1) return Infinity;
+    let minDist = Infinity;
+    for (const other of world.agents) {
+      if (other.group === group) continue;
+      const dx = group.position.x - other.group.position.x;
+      const dz = group.position.z - other.group.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < minDist) minDist = dist;
+    }
+    return minDist;
+  }
+  
+  function distanceToNearestFire() {
+    const { dist } = nearestBuilding(world, group.position, 'fire');
+    return dist;
   }
 
   function snap() {
@@ -227,6 +250,31 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (name === 'eat' && state.hunger >= 0.75) {
       name = 'seek_material';
       action = ACTION_NAMES.indexOf('seek_material');
+    }
+    
+    // Entertainment-based behavior modification: prefer variety when bored
+    if (state.entertainment < 0.35) {
+      const isBoring = 
+        (name === 'eat' && state.lastBusyKind === 'eat') ||
+        (name === 'seek_food' && state.lastBusyKind === 'forage') ||
+        (name === 'combine' && !canCombineAny()); // Can't invent anything new
+      
+      if (isBoring) {
+        // Prefer variety: switch to different activity
+        const alternatives = [];
+        if (canProcessAny()) alternatives.push('process');
+        if (nextBuild()) alternatives.push('build');
+        if (canCombineAny()) alternatives.push('combine');
+        // Always have seek_material as fallback
+        alternatives.push('seek_material');
+        
+        // Pick a random alternative that's not the same as last
+        const filtered = alternatives.filter(a => a !== state.lastBusyKind);
+        if (filtered.length > 0) {
+          name = filtered[Math.floor(Math.random() * filtered.length)];
+          action = ACTION_NAMES.indexOf(name);
+        }
+      }
     }
     
     state.actionIndex = action;
@@ -599,6 +647,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     group.rotation.y = yaw;
     state.walkPhase += dt * 9 * (speed / 2.2);
     
+    // Track distance traveled for entertainment
+    state.distanceTraveled += step;
+    
     // Apply separation after movement
     separateFromOthers();
     
@@ -796,9 +847,33 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Record last busy kind and forage source for variety
     if (b) {
+      const wasRepeating = 
+        (b.kind === state.lastBusyKind) && 
+        ((b.kind === 'forage' && b.source === state.lastForageSource) || 
+         b.kind === 'eat' ||
+         b.kind === 'combine');
+      
       state.lastBusyKind = b.kind;
       if (b.kind === 'forage' && b.source) {
         state.lastForageSource = b.source;
+      }
+      
+      // Update entertainment based on activity
+      if (b.kind === 'combine') {
+        // Check if this was actually a new discovery
+        const isNewDiscovery = state.lastCombineWasNew || false;
+        if (isNewDiscovery) {
+          // New discovery: significant entertainment boost
+          state.entertainment = Math.min(1, state.entertainment + 0.25);
+        } else if (wasRepeating) {
+          // Repeating known combine: drain entertainment
+          state.entertainment = Math.max(0, state.entertainment - 0.08);
+        }
+      } else if (b.kind === 'forage' || b.kind === 'eat') {
+        if (wasRepeating) {
+          // Repeating same forage or eat: drain entertainment faster
+          state.entertainment = Math.max(0, state.entertainment - 0.06);
+        }
       }
     }
     
@@ -872,6 +947,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           // Add output
           const outputId = result.output;
           state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
+          
+          // Track if this was a new discovery for entertainment
+          state.lastCombineWasNew = result.discovered;
           
           // Reward: base craft reward + curiosity bonus for first discovery
           let reward = 0.7;
@@ -1244,10 +1322,13 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   function updateHud() {
     const h = Math.round(state.hunger * 100);
     const e = Math.round(state.energy * 100);
+    const m = Math.round(state.entertainment * 100);
     if (hud.hungerFill) hud.hungerFill.style.width = `${h}%`;
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
     if (hud.energyVal) hud.energyVal.textContent = `${e}%`;
+    if (hud.moodFill) hud.moodFill.style.width = `${m}%`;
+    if (hud.moodVal) hud.moodVal.textContent = `${m}%`;
     
     // Update this agent's mind status
     if (hud.action) {
@@ -1343,6 +1424,37 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       state.sluggish = false;
       state.energy = Math.min(1, state.energy + 0.015 * dt);
     }
+    
+    // Entertainment updates
+    // Passive slow drain
+    const baseDrain = 0.01 * dt;
+    let entertainmentDrain = baseDrain;
+    
+    // Extra drain at night if not near hut or fire
+    if (isNight && !isProtected) {
+      entertainmentDrain += 0.015 * dt;
+    }
+    
+    // Recovery from walking meaningful distances
+    if (state.distanceTraveled > 8.0) {
+      state.entertainment = Math.min(1, state.entertainment + 0.12);
+      state.distanceTraveled = 0;
+    }
+    
+    // Recovery from being near other settlers
+    const distToOther = distanceToNearestAgent();
+    if (distToOther < 2.5) {
+      state.entertainment = Math.min(1, state.entertainment + 0.02 * dt);
+    }
+    
+    // Recovery from being near fire
+    const distToFire = distanceToNearestFire();
+    if (distToFire < FIRE_RADIUS) {
+      state.entertainment = Math.min(1, state.entertainment + 0.015 * dt);
+    }
+    
+    // Apply entertainment drain
+    state.entertainment = Math.max(0, state.entertainment - entertainmentDrain);
 
     if (!state.busy) {
       state.thinkAcc += dt;

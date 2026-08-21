@@ -40,7 +40,7 @@ const FOOD_CAP = 4;
 
 export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
   const group = assets.create('agent');
-  const spawnY = world.heightAt ? world.heightAt(0, 0) + 2.4 : 2.4;
+  const spawnY = world.heightAt ? world.heightAt(0, 0) : 0;
   group.position.set(0, spawnY, 0);
   world.scene.add(group);
 
@@ -83,7 +83,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     target: null,
     busy: null, // { kind, t, dur, extra }
     vy: 0,
-    landed: false,
+    landed: true,
     facing: 0,
     walkPhase: 0,
     thinkAcc: 0,

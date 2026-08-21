@@ -280,9 +280,9 @@ export function updateWorldItems(world, dt) {
       const groundY = world.heightAt ? world.heightAt(creature.mesh.position.x, creature.mesh.position.z) : 0;
       
       if (creature.swimPhase !== undefined) {
-        // Fish: swim slightly above pond floor with gentle bob
+        // Fish: swim slightly above pond floor with gentle bob (never below groundY)
         creature.swimPhase += dt * 3;
-        creature.mesh.position.y = groundY + Math.sin(creature.swimPhase) * 0.04;
+        creature.mesh.position.y = groundY + 0.08 + Math.sin(creature.swimPhase) * 0.04;
       } else {
         // Land animals: hop on the ground
         creature.mesh.position.y = groundY + Math.abs(Math.sin(creature.hopPhase)) * 0.08;

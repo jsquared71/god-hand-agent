@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnPickup } from './resources.js';
+import { playDrop } from './audio.js';
 
 export function setupDrop(world, assets, camControls, gameState) {
   const raycaster = new THREE.Raycaster();
@@ -91,6 +92,9 @@ export function setupDrop(world, assets, camControls, gameState) {
       
       // Spend Favor
       gameState.favor -= 1;
+      
+      // Play drop sound
+      playDrop();
       
       // Player-dropped resources are NOT world-spawned
       spawnPickup(world, assets, type, hit.point, { falling: true, isWorldSpawned: false });

@@ -904,6 +904,7 @@ export function createWorld(canvas, seed = null) {
     transitionT: 0,
     transitionDuration: 5.0, // 5 second transition
     rainParticles: null, // Will hold rain particle system
+    temperature: 60, // Temperature in Fahrenheit (integer)
   };
   
   // Create rain particle system
@@ -1003,6 +1004,45 @@ export function createWorld(canvas, seed = null) {
     lastIsNight: false,
   };
   
+  function updateTemperature() {
+    const t = worldClock.time;
+    
+    let baseTemp = 60;
+    
+    if (t < 0.15) {
+      const dawn = t / 0.15;
+      baseTemp = 44 + dawn * 12;
+    } else if (t < 0.35) {
+      const morning = (t - 0.15) / 0.20;
+      baseTemp = 56 + morning * 12;
+    } else if (t < 0.55) {
+      const midday = (t - 0.35) / 0.20;
+      baseTemp = 68 + midday * 10;
+    } else if (t < 0.68) {
+      const afternoon = (t - 0.55) / 0.13;
+      baseTemp = 78 - afternoon * 10;
+    } else if (t < 0.78) {
+      const dusk = (t - 0.68) / 0.10;
+      baseTemp = 68 - dusk * 12;
+    } else {
+      const night = (t - 0.78) / 0.22;
+      baseTemp = 56 - night * 12;
+    }
+    
+    let weatherMod = 0;
+    if (weather.current === 'clear') {
+      if (t >= 0.35 && t < 0.55) {
+        weatherMod = 2;
+      }
+    } else if (weather.current === 'wind') {
+      weatherMod = -5;
+    } else if (weather.current === 'rain') {
+      weatherMod = -10;
+    }
+    
+    weather.temperature = Math.round(baseTemp + weatherMod);
+  }
+  
   function updateDayNight(dt) {
     updateWeather(dt); // Update weather alongside day/night
     
@@ -1011,6 +1051,8 @@ export function createWorld(canvas, seed = null) {
       worldClock.time -= 1;
       worldClock.dayIndex++;
     }
+    
+    updateTemperature();
     
     const t = worldClock.time;
     const isNight = t >= NIGHT_START;

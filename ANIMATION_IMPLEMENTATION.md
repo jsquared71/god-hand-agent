@@ -9,11 +9,15 @@ This implementation adds THREE.AnimationMixer support for Meshy settler meshes (
 
 #### Animation Clip Loading
 - **Main agent GLB**: Loads `agent.glb` and stores any embedded animations in `userData.clips`
+  - ⚠️ **CRITICAL**: Agent armature must be wrapped in a Group, not scaled directly
+  - Direct scaling breaks mesh into jagged shards (clips animate in original space)
+  - Solution: `wrapper.add(armature); wrapper.scale.setScalar(scale);`
 - **Companion clip files**: After preload, tries to load:
   - `agent-idle.glb` → idle animation (action 0)
   - `agent-walk.glb` → in-place casual walk (action 613)
   - `agent-work.glb` → gather/collect clip (action 284)
 - **Soft-fail mechanism**: Missing files 404 gracefully using try-catch
+- **Companions as donors**: Extract animations only, do NOT scale or add mesh
 - **Storage**: Clips stored in proto's `userData.animationClips` as `{ idle: [...], walk: [...], work: [...] }`
 
 #### Skeleton Cloning
@@ -132,6 +136,14 @@ If `!state.mixer || Object.keys(state.actions).length === 0`:
 - Verify `SkeletonUtils.clone` is being used
 - Check `hasSkinningOrBones()` returns true
 - Inspect `clone.userData.fromGltf` value
+
+### Mesh tears into jagged shards
+- ⚠️ **CRITICAL**: Never `centerAndScale` the agent armature directly
+- Mixamo clips animate bones in **original space**
+- Direct scaling breaks vertex skinning (mesh explodes)
+- Solution: Wrap armature in Group, scale wrapper only
+- Verify wrapper pattern in `load('agent')` function
+- Check armature position/scale are untouched (identity)
 
 ### Clips don't load
 - Open Network tab, filter for `.glb`

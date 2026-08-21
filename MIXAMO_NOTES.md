@@ -53,15 +53,28 @@ Each companion GLB is a **full skinned character** (~9.5MB) with:
 - **agent-walk.glb**: `Armature|Casual_Walk_inplace|baselayer`
 - **agent-work.glb**: `Armature|Collect_Object|baselayer`
 
-### Usage Pattern
+### Usage Pattern - CRITICAL: Wrapper Required
 ```javascript
+// Load agent.glb - DO NOT centerAndScale the armature directly!
+// Scaling the armature breaks animations (mesh tears into jagged shards)
+// because Mixamo clips animate Hips in original space
+
+// CORRECT: Wrap the armature in a Group and scale the wrapper
+const wrapper = new THREE.Group();
+const box = new THREE.Box3().setFromObject(root);
+const scale = targetSize / maxDim;
+wrapper.add(root);  // armature stays in original space
+wrapper.scale.setScalar(scale);  // scale the wrapper instead
+wrapper.position.y -= box.min.y;  // sit wrapper on ground
+
 // Companion GLBs are clip donors only
-// Load animations, discard mesh
+// Load animations, discard mesh, DO NOT scale
 const gltf = await loader.parseAsync(buffer);
 if (gltf.animations && gltf.animations.length > 0) {
   clips[role] = gltf.animations; // Keep only animations
 }
 // Do NOT add gltf.scene to the world
+// Do NOT centerAndScale companions
 ```
 
 ## Implementation Details
@@ -180,9 +193,35 @@ if (!state.actions[desiredAction]) {
 - **No IK**: No inverse kinematics for tool holding
 - **Limited customization**: Pre-baked animations only
 - **File size**: Each companion is full character (~9.5MB)
+- **⚠️ CRITICAL**: Must wrap armature, never centerAndScale directly
+  - Direct scaling breaks mesh into jagged shards
+  - Clips animate Hips in original space
+  - Solution: scale wrapper Group, not armature
 
 ### Optimization Options
 - **Strip mesh from companions**: Extract clips only (~500KB each)
 - **Quantize animations**: Reduce precision for smaller files
 - **Merge clips**: Single GLB with multiple clips
 - **Procedural IK**: Add tool-holding layer on top
+
+## Common Pitfalls
+
+### ❌ NEVER Scale Armature Directly
+```javascript
+// WRONG - breaks mesh into jagged shards
+const root = gltf.scene;
+centerAndScale(root, 'agent');  // Tears mesh apart!
+```
+
+The problem: `centerAndScale` modifies the armature's position/scale, but Mixamo clips still animate bones in **original space**. This causes vertices to be pulled in wrong directions, creating jagged shards.
+
+### ✅ ALWAYS Use Wrapper Group
+```javascript
+// CORRECT - preserves armature space
+const wrapper = new THREE.Group();
+wrapper.add(root);  // armature untouched
+wrapper.scale.setScalar(targetScale);  // scale wrapper only
+wrapper.position.y -= bbox.min.y;  // sit wrapper on ground
+```
+
+The wrapper scales the entire hierarchy uniformly, so clips can still find Hips/bones in their expected positions.

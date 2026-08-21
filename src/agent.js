@@ -93,6 +93,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     currentBiome: null, // Current biome (meadow, forest, rock, water)
     biomeEntryTime: 0, // Time when entered current biome
     lastBiomeVisit: {}, // Map of biome -> time since visited (for novelty)
+    itch: 0.25, // Property drive (0 = content, 1 = burning need)
+    itchTag: 'sharp', // Which property they currently want
   };
 
   const hud = {
@@ -104,9 +106,20 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     moodVal: document.getElementById(`${name.toLowerCase()}-mood-val`),
     wanderlustFill: document.getElementById(`${name.toLowerCase()}-wanderlust-fill`),
     wanderlustVal: document.getElementById(`${name.toLowerCase()}-wanderlust-val`),
+    itchFill: document.getElementById(`${name.toLowerCase()}-itch-fill`),
+    itchVal: document.getElementById(`${name.toLowerCase()}-itch-val`),
+    itchTag: document.getElementById(`${name.toLowerCase()}-itch-tag`),
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
+  
+  // Initialize itchTag to a missing property
+  // This will be updated later if loading from save
+  setTimeout(() => {
+    if (state.itch === 0.25 && state.itchTag === 'sharp') {
+      state.itchTag = pickMissingTag();
+    }
+  }, 100);
 
   function hutNear() {
     const { dist } = nearestBuilding(world, group.position, 'hut');
@@ -122,6 +135,70 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const { item, dist } = nearestBuilding(world, group.position, 'fire');
     return dist < FIRE_RADIUS ? item : null;
   }
+  
+  function hasProperty(tag) {
+    if (!state.notebook) return false;
+    
+    // Check inventory
+    for (const [itemId, count] of Object.entries(state.inventory)) {
+      if (count > 0 && itemHasTag(itemId, tag, state.notebook)) {
+        return true;
+      }
+    }
+    
+    // Check buildings/world items treated as camp stock
+    const buildings = world.buildings || [];
+    for (const building of buildings) {
+      if (building.type === 'hut' && (tag === TAGS.STRUCTURAL)) return true;
+      if (building.type === 'well' && (tag === TAGS.VESSEL || tag === TAGS.STRUCTURAL)) return true;
+      if (building.type === 'fire' && (tag === TAGS.FUEL)) return true;
+      if (building.type === 'chest' && (tag === TAGS.STRUCTURAL || tag === TAGS.VESSEL)) return true;
+      if (building.type === 'workbench' && (tag === TAGS.STRUCTURAL)) return true;
+    }
+    
+    return false;
+  }
+  
+  function pickMissingTag() {
+    const itchableTags = [TAGS.SHARP, TAGS.VESSEL, TAGS.FUEL, TAGS.STRUCTURAL, TAGS.MOBILE];
+    const missing = itchableTags.filter(tag => !hasProperty(tag));
+    
+    if (missing.length === 0) {
+      return itchableTags[Math.floor(Math.random() * itchableTags.length)];
+    }
+    
+    return missing[Math.floor(Math.random() * missing.length)];
+  }
+  
+  function updateItch(dt) {
+    const hasCurrentTag = hasProperty(state.itchTag);
+    
+    if (hasCurrentTag) {
+      // Drop itch quickly when we acquire the wanted property
+      state.itch = Math.max(0, state.itch - 0.4);
+      if (state.itch < 0.1) {
+        state.itchTag = pickMissingTag();
+        state.itch = 0;
+      }
+    } else {
+      // Climb slowly when lacking the property
+      const isNight = world.worldClock && world.worldClock.time >= 0.7;
+      const justProcessedOrCombined = state.lastBusyKind === 'process' || state.lastBusyKind === 'combine';
+      
+      let itchGain = 0.012 * dt;
+      
+      if (isNight) {
+        itchGain *= 1.3;
+      }
+      
+      if (justProcessedOrCombined) {
+        itchGain *= 1.5;
+      }
+      
+      state.itch = Math.min(1, state.itch + itchGain);
+    }
+  }
+
   
   function getBiomeAt(x, z) {
     // Biome layout based on world.js:
@@ -379,6 +456,22 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
       }
     }
+    
+    // Itch-based behavior modification: prefer activities that could yield the wanted tag
+    if (state.itch > 0.55 && state.hunger > 0.3) {
+      const canSeekMaterial = (s.wood.item || s.forageWood.item || s.ore.item || s.forageOre.item || s.stone.item || s.forageStone.item);
+      const alternatives = [];
+      
+      if (canSeekMaterial) alternatives.push('seek_material');
+      if (canProcessAny()) alternatives.push('process');
+      if (canCombineAny()) alternatives.push('combine');
+      
+      if (alternatives.length > 0 && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
+        name = alternatives[Math.floor(Math.random() * alternatives.length)];
+        action = ACTION_NAMES.indexOf(name);
+      }
+    }
+
     
     state.actionIndex = action;
     state.action = name;
@@ -1422,6 +1515,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const e = Math.round(state.energy * 100);
     const m = Math.round(state.entertainment * 100);
     const w = Math.round(state.wanderlust * 100);
+    const i = Math.round(state.itch * 100);
     if (hud.hungerFill) hud.hungerFill.style.width = `${h}%`;
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
@@ -1430,6 +1524,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (hud.moodVal) hud.moodVal.textContent = `${m}%`;
     if (hud.wanderlustFill) hud.wanderlustFill.style.width = `${w}%`;
     if (hud.wanderlustVal) hud.wanderlustVal.textContent = `${w}%`;
+    if (hud.itchFill) hud.itchFill.style.width = `${i}%`;
+    if (hud.itchVal) hud.itchVal.textContent = `${i}%`;
+    if (hud.itchTag) hud.itchTag.textContent = state.itchTag || 'sharp';
     
     // Update this agent's mind status
     if (hud.action) {
@@ -1604,6 +1701,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     state.wanderlust = Math.min(1, state.wanderlust + wanderlustGain);
+    
+    // Itch updates
+    updateItch(dt);
 
     if (!state.busy) {
       state.thinkAcc += dt;

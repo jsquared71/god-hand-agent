@@ -31,6 +31,8 @@ export function serializeWorld(world, agents, camera, gameState, notebook = null
       energy: agent.state.energy,
       entertainment: agent.state.entertainment,
       wanderlust: agent.state.wanderlust || 0,
+      itch: agent.state.itch || 0.25,
+      itchTag: agent.state.itchTag || 'sharp',
       currentBiome: agent.state.currentBiome || null,
       biomeEntryTime: agent.state.biomeEntryTime || 0,
       lastBiomeVisit: agent.state.lastBiomeVisit || {},
@@ -123,6 +125,8 @@ export function deserializeWorld(state, world, agents, assets, camera, gameState
     agent.state.energy = agentData.energy ?? 1;
     agent.state.entertainment = agentData.entertainment ?? 1.0;
     agent.state.wanderlust = agentData.wanderlust ?? 0.5;
+    agent.state.itch = agentData.itch ?? 0.25;
+    agent.state.itchTag = agentData.itchTag ?? 'sharp';
     agent.state.currentBiome = agentData.currentBiome ?? null;
     agent.state.biomeEntryTime = agentData.biomeEntryTime ?? 0;
     agent.state.lastBiomeVisit = agentData.lastBiomeVisit ?? {};

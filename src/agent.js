@@ -95,6 +95,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     lastBiomeVisit: {}, // Map of biome -> time since visited (for novelty)
     itch: 0.25, // Property drive (0 = content, 1 = burning need)
     itchTag: 'sharp', // Which property they currently want
+    itchBoostTimer: 0, // Timer for 1.5× itch gain after process/combine that didn't yield tag
   };
 
   const hud = {
@@ -112,14 +113,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
-  
-  // Initialize itchTag to a missing property
-  // This will be updated later if loading from save
-  setTimeout(() => {
-    if (state.itch === 0.25 && state.itchTag === 'sharp') {
-      state.itchTag = pickMissingTag();
-    }
-  }, 100);
 
   function hutNear() {
     const { dist } = nearestBuilding(world, group.position, 'hut');
@@ -146,14 +139,17 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       }
     }
     
-    // Check buildings/world items treated as camp stock
+    // Check equipped tools (hasTools means they have metal+sharp+weapon)
+    if (state.hasTools && (tag === TAGS.SHARP || tag === TAGS.METAL || tag === TAGS.WEAPON)) {
+      return true;
+    }
+    
+    // Check buildings treated as camp stock
     const buildings = world.buildings || [];
     for (const building of buildings) {
-      if (building.type === 'hut' && (tag === TAGS.STRUCTURAL)) return true;
-      if (building.type === 'well' && (tag === TAGS.VESSEL || tag === TAGS.STRUCTURAL)) return true;
-      if (building.type === 'fire' && (tag === TAGS.FUEL)) return true;
-      if (building.type === 'chest' && (tag === TAGS.STRUCTURAL || tag === TAGS.VESSEL)) return true;
-      if (building.type === 'workbench' && (tag === TAGS.STRUCTURAL)) return true;
+      if (itemHasTag(building.type, tag, state.notebook)) {
+        return true;
+      }
     }
     
     return false;
@@ -170,7 +166,46 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     return missing[Math.floor(Math.random() * missing.length)];
   }
   
+  function itemCanYieldTag(itemId, tag) {
+    if (!state.notebook) return false;
+    
+    // Check if the item itself has the tag
+    if (itemHasTag(itemId, tag, state.notebook)) return true;
+    
+    // Check if known recipes using this item can produce the tag
+    // (e.g., wood can make planks/sticks which are structural+sharp)
+    const discoveries = state.notebook.getDiscovered();
+    for (const recipe of discoveries) {
+      if (recipe.inputs && recipe.inputs.includes(itemId)) {
+        if (recipe.tags && recipe.tags.includes(tag)) {
+          return true;
+        }
+      }
+    }
+    
+    // Check BASE_ITEMS for common transforms
+    // wood -> planks/sticks (structural+sharp), stone -> sharp, ore -> metal
+    const itemInfo = state.notebook._getItemInfo(itemId);
+    if (itemInfo && itemInfo.tags) {
+      if (itemInfo.tags.includes(tag)) return true;
+      
+      // Infer potential: structural items + sharp items can make sharp structural things
+      if (tag === TAGS.SHARP && (itemInfo.tags.includes(TAGS.STRUCTURAL) || itemId === 'stone')) return true;
+      if (tag === TAGS.STRUCTURAL && itemInfo.tags.includes(TAGS.FUEL)) return true; // wood-like
+      if (tag === TAGS.METAL && itemInfo.tags.includes(TAGS.METAL)) return true;
+      if (tag === TAGS.VESSEL && (itemId === 'stone' || itemId === 'wood' || itemInfo.tags.includes(TAGS.STRUCTURAL))) return true;
+    }
+    
+    return false;
+  }
+
+  
   function updateItch(dt) {
+    // Initialize itchTag if still default and already have sharp
+    if (state.itchTag === 'sharp' && state.itch === 0.25 && hasProperty(TAGS.SHARP)) {
+      state.itchTag = pickMissingTag();
+    }
+    
     const hasCurrentTag = hasProperty(state.itchTag);
     
     if (hasCurrentTag) {
@@ -183,7 +218,6 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else {
       // Climb slowly when lacking the property
       const isNight = world.worldClock && world.worldClock.time >= 0.7;
-      const justProcessedOrCombined = state.lastBusyKind === 'process' || state.lastBusyKind === 'combine';
       
       let itchGain = 0.012 * dt;
       
@@ -191,8 +225,10 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         itchGain *= 1.3;
       }
       
-      if (justProcessedOrCombined) {
+      // Apply boost only if just finished process/combine (tracked by itchBoostTimer)
+      if (state.itchBoostTimer && state.itchBoostTimer > 0) {
         itchGain *= 1.5;
+        state.itchBoostTimer -= dt;
       }
       
       state.itch = Math.min(1, state.itch + itchGain);
@@ -1090,12 +1126,24 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           state.inventory = spend(state.inventory, rec.inputs);
           const outCount = rec.outCount || 1;
           state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
+          
+          // If output doesn't have the itch tag, set boost timer
+          if (state.notebook && !itemHasTag(rec.out, state.itchTag, state.notebook)) {
+            state.itchBoostTimer = 10.0;
+          }
+          
           brain.reinforce(0.85);
         }
       } else if ((state.inventory[b.inputType] || 0) > 0) {
         state.inventory[b.inputType] -= 1;
         const outCount = rec.outCount || 1;
         state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
+        
+        // If output doesn't have the itch tag, set boost timer
+        if (state.notebook && !itemHasTag(rec.out, state.itchTag, state.notebook)) {
+          state.itchBoostTimer = 10.0;
+        }
+        
         brain.reinforce(0.85);
       }
     } else if (b.kind === 'build') {
@@ -1132,6 +1180,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           // Add output
           const outputId = result.output;
           state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
+          
+          // If output doesn't have the itch tag, set boost timer
+          if (!itemHasTag(outputId, state.itchTag, state.notebook)) {
+            state.itchBoostTimer = 10.0;
+          }
           
           // Entertainment: boost for new discovery, drain for repetition
           if (result.discovered) {
@@ -1318,18 +1371,29 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       // Find all options (pickup or forage)
       const options = [];
       
-      if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
-      if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
-      if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true });
-      if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true });
+      if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false, type: n.item.type });
+      if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true, type: forageWood.harvestType });
+      if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true, type: forageOre.harvestType });
+      if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true, type: forageStone.harvestType });
       
       if (options.length === 0) {
         brain.reinforce(-0.03);
         return false;
       }
       
-      // Sort by distance
-      options.sort((a, b) => a.dist - b.dist);
+      // Tag-biased scoring when itch is high
+      if (state.itch > 0.55 && state.notebook) {
+        for (const opt of options) {
+          opt.itchScore = itemCanYieldTag(opt.type, state.itchTag) ? 0 : 1;
+        }
+        options.sort((a, b) => {
+          if (a.itchScore !== b.itchScore) return a.itchScore - b.itchScore;
+          return a.dist - b.dist;
+        });
+      } else {
+        // Sort by distance
+        options.sort((a, b) => a.dist - b.dist);
+      }
       
       // Prefer variety: avoid same forage source if just foraged there
       let choice = options[0];
@@ -1366,19 +1430,30 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         // Build list of options
         const options = [];
         
-        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
-        if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
-        if (forageGrain) options.push({ target: forageGrain, dist: nearestForageSource(world, group.position, ['grain']).dist, isForage: true });
-        if (forageFood) options.push({ target: forageFood, dist: s.forageFood.dist, isForage: true });
-        if (forageWater) options.push({ target: forageWater, dist: s.forageWater.dist, isForage: true });
+        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false, type: n.item.type });
+        if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true, type: forageWood.harvestType });
+        if (forageGrain) options.push({ target: forageGrain, dist: nearestForageSource(world, group.position, ['grain']).dist, isForage: true, type: 'grain' });
+        if (forageFood) options.push({ target: forageFood, dist: s.forageFood.dist, isForage: true, type: forageFood.harvestType });
+        if (forageWater) options.push({ target: forageWater, dist: s.forageWater.dist, isForage: true, type: 'water' });
         
         if (options.length === 0) {
           brain.reinforce(-0.04);
           return false;
         }
         
-        // Sort by distance
-        options.sort((a, b) => a.dist - b.dist);
+        // Tag-biased scoring when itch is high
+        if (state.itch > 0.55 && state.notebook) {
+          for (const opt of options) {
+            opt.itchScore = itemCanYieldTag(opt.type, state.itchTag) ? 0 : 1;
+          }
+          options.sort((a, b) => {
+            if (a.itchScore !== b.itchScore) return a.itchScore - b.itchScore;
+            return a.dist - b.dist;
+          });
+        } else {
+          // Sort by distance
+          options.sort((a, b) => a.dist - b.dist);
+        }
         
         // Prefer variety: avoid same forage source if just foraged there
         let choice = options[0];
@@ -1433,18 +1508,18 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         // Build list of options
         const options = [];
         
-        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false });
+        if (n.item) options.push({ target: n.item, dist: n.dist, isForage: false, type: n.item.type });
         if (need.includes('wood') || need.length === 0) {
           const forageWood = s.forageWood.item;
-          if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true });
+          if (forageWood) options.push({ target: forageWood, dist: s.forageWood.dist, isForage: true, type: 'wood' });
         }
         if (need.includes('stone') || need.length === 0) {
           const forageStone = s.forageStone.item;
-          if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true });
+          if (forageStone) options.push({ target: forageStone, dist: s.forageStone.dist, isForage: true, type: 'stone' });
         }
         if (need.includes('ore') || need.length === 0) {
           const forageOre = s.forageOre.item;
-          if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true });
+          if (forageOre) options.push({ target: forageOre, dist: s.forageOre.dist, isForage: true, type: 'ore' });
         }
         
         if (options.length === 0) {
@@ -1452,8 +1527,19 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           return false;
         }
         
-        // Sort by distance
-        options.sort((a, b) => a.dist - b.dist);
+        // Tag-biased scoring when itch is high
+        if (state.itch > 0.55 && state.notebook) {
+          for (const opt of options) {
+            opt.itchScore = itemCanYieldTag(opt.type, state.itchTag) ? 0 : 1;
+          }
+          options.sort((a, b) => {
+            if (a.itchScore !== b.itchScore) return a.itchScore - b.itchScore;
+            return a.dist - b.dist;
+          });
+        } else {
+          // Sort by distance
+          options.sort((a, b) => a.dist - b.dist);
+        }
         
         // Prefer variety: avoid same forage source if just foraged there
         let choice = options[0];

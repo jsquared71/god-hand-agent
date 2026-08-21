@@ -850,26 +850,15 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       const wasRepeating = 
         (b.kind === state.lastBusyKind) && 
         ((b.kind === 'forage' && b.source === state.lastForageSource) || 
-         b.kind === 'eat' ||
-         b.kind === 'combine');
+         b.kind === 'eat');
       
       state.lastBusyKind = b.kind;
       if (b.kind === 'forage' && b.source) {
         state.lastForageSource = b.source;
       }
       
-      // Update entertainment based on activity
-      if (b.kind === 'combine') {
-        // Check if this was actually a new discovery
-        const isNewDiscovery = state.lastCombineWasNew || false;
-        if (isNewDiscovery) {
-          // New discovery: significant entertainment boost
-          state.entertainment = Math.min(1, state.entertainment + 0.25);
-        } else if (wasRepeating) {
-          // Repeating known combine: drain entertainment
-          state.entertainment = Math.max(0, state.entertainment - 0.08);
-        }
-      } else if (b.kind === 'forage' || b.kind === 'eat') {
+      // Update entertainment for forage/eat repetition (combine handled separately)
+      if (b.kind === 'forage' || b.kind === 'eat') {
         if (wasRepeating) {
           // Repeating same forage or eat: drain entertainment faster
           state.entertainment = Math.max(0, state.entertainment - 0.06);
@@ -948,8 +937,14 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
           const outputId = result.output;
           state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
           
-          // Track if this was a new discovery for entertainment
-          state.lastCombineWasNew = result.discovered;
+          // Entertainment: boost for new discovery, drain for repetition
+          if (result.discovered) {
+            // New discovery: significant entertainment boost
+            state.entertainment = Math.min(1, state.entertainment + 0.25);
+          } else if (state.lastBusyKind === 'combine') {
+            // Repeating known combine: drain entertainment
+            state.entertainment = Math.max(0, state.entertainment - 0.08);
+          }
           
           // Reward: base craft reward + curiosity bonus for first discovery
           let reward = 0.7;

@@ -301,18 +301,31 @@ function updateFavor(dt) {
     campStatus.stocked.classList.toggle('active', chestStocked);
   }
   
-  // Update world status indicators
-  const isNight = world.worldClock && world.worldClock.time >= 0.7;
-  const worldDayEl = document.getElementById('world-day');
-  const worldWeatherEl = document.getElementById('world-weather');
-  
-  if (worldDayEl) {
-    worldDayEl.textContent = isNight ? 'Night' : 'Day';
+  // Update sky HUD
+  if (world.worldClock) {
+    const time = world.worldClock.time;
+    const dayNum = world.worldClock.dayIndex + 1;
+    
+    let period = 'Morning';
+    if (time < 0.15) period = 'Dawn';
+    else if (time < 0.35) period = 'Morning';
+    else if (time < 0.55) period = 'Midday';
+    else if (time < 0.68) period = 'Afternoon';
+    else if (time < 0.78) period = 'Dusk';
+    else period = 'Night';
+    
+    const skyTimeEl = document.getElementById('sky-time');
+    if (skyTimeEl) {
+      skyTimeEl.textContent = `Day ${dayNum} · ${period}`;
+    }
   }
   
-  if (worldWeatherEl && world.weather) {
-    const weatherText = world.weather.current.charAt(0).toUpperCase() + world.weather.current.slice(1);
-    worldWeatherEl.textContent = weatherText;
+  if (world.weather) {
+    const skyWeatherEl = document.getElementById('sky-weather');
+    if (skyWeatherEl) {
+      const weatherText = world.weather.current.charAt(0).toUpperCase() + world.weather.current.slice(1);
+      skyWeatherEl.textContent = weatherText;
+    }
   }
 }
 

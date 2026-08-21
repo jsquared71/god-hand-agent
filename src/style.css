@@ -597,3 +597,32 @@ body.dragging-resource {
     left: 10px;
   }
 }
+
+#sky-hud {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: right;
+}
+
+.sky-line {
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sky-line:first-child {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Animation Test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    #canvas {
+      width: 100vw;
+      height: 70vh;
+      display: block;
+    }
+    #info {
+      padding: 20px;
+      background: #2a2a2a;
+      border-radius: 8px;
+      margin: 20px;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      background: #3a3a3a;
+      border-radius: 4px;
+    }
+    .success { color: #4caf50; }
+    .error { color: #f44336; }
+    .warning { color: #ff9800; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="info">
+    <h2>Animation System Test</h2>
+    <div class="status" id="status">Loading...</div>
+    <div id="details"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+
+    const statusEl = document.getElementById('status');
+    const detailsEl = document.getElementById('details');
+    
+    function log(msg, type = 'info') {
+      const div = document.createElement('div');
+      div.className = `status ${type}`;
+      div.textContent = msg;
+      detailsEl.appendChild(div);
+      console.log(msg);
+    }
+
+    async function testAnimationSystem() {
+      log('Testing animation system...', 'info');
+      
+      // Test 1: Load base agent.glb
+      log('Test 1: Loading agent.glb', 'info');
+      const loader = new GLTFLoader();
+      try {
+        const response = await fetch('/assets/glb/agent.glb');
+        if (!response.ok) throw new Error('agent.glb not found');
+        const buffer = await response.arrayBuffer();
+        const gltf = await loader.parseAsync(buffer, '/assets/glb/');
+        
+        const root = gltf.scene || gltf.scenes[0];
+        log(`✓ agent.glb loaded (${gltf.animations?.length || 0} animations)`, 'success');
+        
+        // Check for skinning
+        let hasSkin = false;
+        root.traverse(child => {
+          if (child.isSkinnedMesh) hasSkin = true;
+        });
+        log(`✓ Skinned mesh detected: ${hasSkin}`, hasSkin ? 'success' : 'warning');
+        
+        // Test 2: Try loading animation companions
+        const companions = ['idle', 'walk', 'work'];
+        const clips = {};
+        
+        for (const name of companions) {
+          try {
+            const url = `/assets/glb/agent-${name}.glb`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('404');
+            const buf = await res.arrayBuffer();
+            const animGltf = await loader.parseAsync(buf, '/assets/glb/');
+            
+            if (animGltf.animations && animGltf.animations.length > 0) {
+              clips[name] = animGltf.animations;
+              log(`✓ agent-${name}.glb loaded (${animGltf.animations.length} clips)`, 'success');
+            } else {
+              log(`⚠ agent-${name}.glb has no animations`, 'warning');
+            }
+          } catch (err) {
+            log(`✗ agent-${name}.glb not found (expected if not generated yet)`, 'warning');
+          }
+        }
+        
+        // Test 3: Clone with SkeletonUtils
+        log('Test 3: Testing SkeletonUtils.clone', 'info');
+        try {
+          const clone1 = hasSkin ? skeletonClone(root) : root.clone(true);
+          const clone2 = hasSkin ? skeletonClone(root) : root.clone(true);
+          log('✓ SkeletonUtils.clone works', 'success');
+          
+          // Test 4: Create mixers
+          if (Object.keys(clips).length > 0) {
+            log('Test 4: Creating AnimationMixers', 'info');
+            const mixer1 = new THREE.AnimationMixer(clone1);
+            const mixer2 = new THREE.AnimationMixer(clone2);
+            
+            // Create actions
+            for (const [role, clipArray] of Object.entries(clips)) {
+              if (clipArray && clipArray.length > 0) {
+                const action1 = mixer1.clipAction(clipArray[0]);
+                const action2 = mixer2.clipAction(clipArray[0]);
+                action1.setLoop(THREE.LoopRepeat);
+                action2.setLoop(THREE.LoopRepeat);
+                log(`✓ Created mixer actions for ${role}`, 'success');
+              }
+            }
+            
+            log('✓ AnimationMixer system ready', 'success');
+          } else {
+            log('⚠ No animation clips loaded - will use procedural fallback', 'warning');
+          }
+          
+        } catch (err) {
+          log(`✗ SkeletonUtils error: ${err.message}`, 'error');
+        }
+        
+        // Summary
+        log('\n=== SUMMARY ===', 'info');
+        log(`Agent GLB: LOADED`, 'success');
+        log(`Skinned mesh: ${hasSkin ? 'YES' : 'NO'}`, hasSkin ? 'success' : 'warning');
+        log(`Animation clips: ${Object.keys(clips).length} loaded`, Object.keys(clips).length > 0 ? 'success' : 'warning');
+        log(`System status: ${Object.keys(clips).length > 0 ? 'READY' : 'FALLBACK MODE'}`, Object.keys(clips).length > 0 ? 'success' : 'warning');
+        
+        if (Object.keys(clips).length === 0) {
+          log('\nTo enable skeletal animations:', 'info');
+          log('1. Place agent-idle.glb, agent-walk.glb, agent-work.glb in /assets/glb/', 'info');
+          log('2. Refresh this page', 'info');
+          log('3. Animations will load automatically', 'info');
+        }
+        
+        statusEl.textContent = 'Tests complete - see results below';
+        statusEl.className = 'status success';
+        
+      } catch (err) {
+        log(`✗ Fatal error: ${err.message}`, 'error');
+        statusEl.textContent = 'Tests failed';
+        statusEl.className = 'status error';
+      }
+    }
+
+    // Setup 3D scene for visual test
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.7), 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight * 0.7);
+    renderer.setClearColor(0x1a1a1a);
+    
+    camera.position.set(2, 1.5, 2);
+    camera.lookAt(0, 0.8, 0);
+    
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 5);
+    scene.add(directionalLight);
+    
+    // Add grid
+    const gridHelper = new THREE.GridHelper(10, 10);
+    scene.add(gridHelper);
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+    
+    // Run tests
+    testAnimationSystem();
+  </script>
+</body>
+</html>

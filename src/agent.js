@@ -688,6 +688,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       if (canSeekMaterial) alternatives.push('seek_material');
       if (canProcessAny()) alternatives.push('process');
       if (canCombineAny()) alternatives.push('combine');
+      if (nextBuild()) alternatives.push('build');
       
       if (alternatives.length > 0 && (name === 'eat' || name === 'seek_food' || name === 'idle')) {
         name = alternatives[Math.floor(Math.random() * alternatives.length)];
@@ -807,6 +808,18 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (name === 'eat' && state.hunger >= 0.75) {
       name = 'seek_material';
       action = ACTION_NAMES.indexOf('seek_material');
+    }
+    
+    // Building preference: if we can afford a plank building, prefer building over milling planks
+    if (name === 'process') {
+      const plankBuilding = nextBuild();
+      if (plankBuilding && plankBuilding !== 'tools' && plankBuilding !== 'fire') {
+        const rec = BUILD[plankBuilding];
+        if (rec.cost.planks && canAfford(state.inventory, rec.cost)) {
+          name = 'build';
+          action = ACTION_NAMES.indexOf('build');
+        }
+      }
     }
     
     // Compute urgency scores for all drives
@@ -1151,7 +1164,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   }
 
   function canProcessAny() {
-    return Object.keys(PROCESS).some((k) => canProcessInput(k));
+    return Object.keys(PROCESS).some((k) => canProcessWithoutStarvingBuildings(k));
   }
 
   function nextBuild() {
@@ -1167,6 +1180,33 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (!hasWell && canAfford(state.inventory, BUILD.well.cost)) return 'well';
     if (!hasChest && canAfford(state.inventory, BUILD.chest.cost)) return 'chest';
     return null;
+  }
+  
+  function plankReserveForNextBuild() {
+    const hasWb = world.buildings.some((b) => b.type === 'workbench');
+    const hasHut = world.buildings.some((b) => b.type === 'hut');
+    const hasFire = world.buildings.some((b) => b.type === 'fire');
+    const hasWell = world.buildings.some((b) => b.type === 'well');
+    const hasChest = world.buildings.some((b) => b.type === 'chest');
+    
+    if (!hasWb) return BUILD.workbench.cost.planks || 0;
+    if (!hasHut) return BUILD.hut.cost.planks || 0;
+    if (!hasFire) return 0;
+    if (!hasWell) return BUILD.well.cost.planks || 0;
+    if (!hasChest) return BUILD.chest.cost.planks || 0;
+    
+    return 0;
+  }
+  
+  function canProcessWithoutStarvingBuildings(inputType) {
+    if (inputType !== 'planks') return canProcessInput(inputType);
+    
+    const plankCount = state.inventory.planks || 0;
+    const reserve = plankReserveForNextBuild();
+    
+    if (plankCount <= reserve) return false;
+    
+    return canProcessInput(inputType);
   }
 
   function bestInvFood() {
@@ -2032,7 +2072,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         walkToward(target.x, target.z, dt, speed);
         return true;
       }
-      const input = Object.keys(PROCESS).find((k) => canProcessInput(k));
+      const input = Object.keys(PROCESS).find((k) => canProcessWithoutStarvingBuildings(k));
       if (input) startProcess(input);
       return false;
     }

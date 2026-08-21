@@ -849,7 +849,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     if (b) {
       const wasRepeating = 
         (b.kind === state.lastBusyKind) && 
-        (b.kind === 'forage' && b.source === state.lastForageSource || 
+        ((b.kind === 'forage' && b.source === state.lastForageSource) || 
          b.kind === 'eat' ||
          b.kind === 'combine');
       

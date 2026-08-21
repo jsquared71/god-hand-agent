@@ -1656,10 +1656,26 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     } else if (b.kind === 'process') {
       const rec = PROCESS[b.inputType];
       const outCount = rec.outCount || 1;
-      const isMat = isMaterialType(rec.out);
+      const isOutputMat = isMaterialType(rec.out);
       
-      if (isMat && !canAddMaterial(outCount)) {
-        return;
+      if (isOutputMat) {
+        let materialInputCount = 0;
+        if (rec.inputs) {
+          for (const [inputType, count] of Object.entries(rec.inputs)) {
+            if (isMaterialType(inputType)) {
+              materialInputCount += count;
+            }
+          }
+        } else {
+          if (isMaterialType(b.inputType)) {
+            materialInputCount = 1;
+          }
+        }
+        
+        const netMaterialChange = outCount - materialInputCount;
+        if (netMaterialChange > 0 && !canAddMaterial(netMaterialChange)) {
+          return;
+        }
       }
       
       if (rec.inputs) {
@@ -2102,10 +2118,26 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       if (inputToProcess) {
         const rec = PROCESS[inputToProcess];
         const outCount = rec.outCount || 1;
-        const isMat = isMaterialType(rec.out);
+        const isOutputMat = isMaterialType(rec.out);
         
-        if (isMat && !canAddMaterial(outCount)) {
-          return false;
+        if (isOutputMat) {
+          let materialInputCount = 0;
+          if (rec.inputs) {
+            for (const [inputType, count] of Object.entries(rec.inputs)) {
+              if (isMaterialType(inputType)) {
+                materialInputCount += count;
+              }
+            }
+          } else {
+            if (isMaterialType(inputToProcess)) {
+              materialInputCount = 1;
+            }
+          }
+          
+          const netMaterialChange = outCount - materialInputCount;
+          if (netMaterialChange > 0 && !canAddMaterial(netMaterialChange)) {
+            return false;
+          }
         }
       }
       

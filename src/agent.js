@@ -24,7 +24,7 @@ import {
   emptyInventory,
   ALL_ITEM_TYPES,
 } from './recipes.js';
-import { nearestPickup, nearestBuilding, removePickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
+import { nearestPickup, nearestBuilding, removePickup, spawnPickup, spawnBuilding, nearestForageSource, harvestForageSource, nearestHuntableFauna, nearestTendableFauna, huntFauna, tendFauna } from './resources.js';
 import { playFootstep, playGather, playBuild, playEat, playProcess, playCombine } from './audio.js';
 import { itemHasTag, TAGS, isFood, getGatherMult, getFoodValue, isMedicine, getHealthValue } from './discovery.js';
 import { getBiomeAt } from './world.js';
@@ -35,6 +35,8 @@ const TEND_RADIUS = 1.2;
 const THINK_DT = 0.28;
 const FOOD_TYPES = ['berry', 'grain', 'water', 'bread', 'stew', 'fish', 'cooked_fish', 'mushroom', 'fruit', 'herb', 'meat', 'egg', 'milk'];
 const MATERIAL_TYPES = ['wood', 'ore', 'stone', 'planks', 'ingot', 'grain'];
+const MATERIAL_CAP = 8;
+const FOOD_CAP = 4;
 
 export function createAgent(world, assets, priors = null, notebook = null, name = 'Agent') {
   const group = assets.create('agent');
@@ -176,6 +178,45 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     return missing[Math.floor(Math.random() * missing.length)];
+  }
+  
+  function isMaterialType(itemType) {
+    return ['wood', 'ore', 'stone', 'planks', 'ingot', 'sticks'].includes(itemType);
+  }
+  
+  function isFoodType(itemType) {
+    if (state.notebook) {
+      return isFood(itemType, state.notebook) || isMedicine(itemType, state.notebook);
+    }
+    return FOOD_TYPES.includes(itemType);
+  }
+  
+  function getMaterialCount() {
+    let count = 0;
+    for (const [itemType, qty] of Object.entries(state.inventory)) {
+      if (isMaterialType(itemType) && qty > 0) {
+        count += qty;
+      }
+    }
+    return count;
+  }
+  
+  function getFoodCount() {
+    let count = 0;
+    for (const [itemType, qty] of Object.entries(state.inventory)) {
+      if (isFoodType(itemType) && qty > 0) {
+        count += qty;
+      }
+    }
+    return count;
+  }
+  
+  function canAddMaterial(amount = 1) {
+    return getMaterialCount() + amount <= MATERIAL_CAP;
+  }
+  
+  function canAddFood(amount = 1) {
+    return getFoodCount() + amount <= FOOD_CAP;
   }
   
   function itemCanYieldTag(itemId, tag) {
@@ -1614,13 +1655,18 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       brain.reinforce(0.9 + rec.hunger);
     } else if (b.kind === 'process') {
       const rec = PROCESS[b.inputType];
+      const outCount = rec.outCount || 1;
+      const isMat = isMaterialType(rec.out);
+      
+      if (isMat && !canAddMaterial(outCount)) {
+        return;
+      }
+      
       if (rec.inputs) {
         if (canAfford(state.inventory, rec.inputs)) {
           state.inventory = spend(state.inventory, rec.inputs);
-          const outCount = rec.outCount || 1;
           state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
           
-          // If output doesn't have the itch tag, set boost timer
           if (state.notebook && !itemHasTag(rec.out, state.itchTag, state.notebook)) {
             state.itchBoostTimer = 10.0;
           }
@@ -1629,10 +1675,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         }
       } else if ((state.inventory[b.inputType] || 0) > 0) {
         state.inventory[b.inputType] -= 1;
-        const outCount = rec.outCount || 1;
         state.inventory[rec.out] = (state.inventory[rec.out] || 0) + outCount;
         
-        // If output doesn't have the itch tag, set boost timer
         if (state.notebook && !itemHasTag(rec.out, state.itchTag, state.notebook)) {
           state.itchBoostTimer = 10.0;
         }
@@ -1660,50 +1704,49 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         brain.reinforce(0.6);
       }
     } else if (b.kind === 'combine') {
-      // Check if we still have both items
       if ((state.inventory[b.item1] || 0) > 0 && (state.inventory[b.item2] || 0) > 0) {
         if (state.notebook) {
           const result = state.notebook.combine(b.item1, b.item2);
           
-          // Consume inputs
           state.inventory[b.item1] -= 1;
           state.inventory[b.item2] -= 1;
           
-          // Add output
           const outputId = result.output;
-          state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
+          const isMat = isMaterialType(outputId);
           
-          // If output doesn't have the itch tag, set boost timer
+          if (isMat && !canAddMaterial(1)) {
+            const ahead = new THREE.Vector3(Math.sin(state.facing), 0, Math.cos(state.facing));
+            spawnPickup(world, assets, outputId, {
+              x: group.position.x + ahead.x * 0.5,
+              z: group.position.z + ahead.z * 0.5,
+            }, { falling: false });
+          } else {
+            state.inventory[outputId] = (state.inventory[outputId] || 0) + 1;
+          }
+          
           if (!itemHasTag(outputId, state.itchTag, state.notebook)) {
             state.itchBoostTimer = 10.0;
           }
           
-          // Play discovery sound if new
           if (result.discovered) {
             playCombine(true);
           }
           
-          // Entertainment: boost for new discovery, drain for repetition
           if (result.discovered) {
-            // New discovery: significant entertainment boost
             state.entertainment = Math.min(1, state.entertainment + 0.25);
           } else if (state.lastBusyKind === 'combine') {
-            // Repeating known combine: drain entertainment
             state.entertainment = Math.max(0, state.entertainment - 0.08);
           }
           
-          // Reward: base craft reward + curiosity bonus for first discovery
           let reward = 0.7;
           if (result.discovered) {
-            reward += 0.4; // Curiosity bonus for new discovery
+            reward += 0.4;
           }
           
           brain.reinforce(reward);
           
-          // Update best gather mult if this item is better
           updateBestGatherMult();
           
-          // Check if tools were created
           if (outputId === 'tools' || (result.recipe.isEquippable && result.recipe.gatherMult >= 2.0)) {
             state.hasTools = true;
           }
@@ -1742,7 +1785,18 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
   function pickupIfClose(types) {
     const n = nearestPickup(world, group.position, types);
     if (n.item && n.dist < PICKUP_RADIUS) {
-      state.inventory[n.item.type] = (state.inventory[n.item.type] || 0) + 1;
+      const itemType = n.item.type;
+      const isMat = isMaterialType(itemType);
+      const isFood = isFoodType(itemType);
+      
+      if (isMat && !canAddMaterial(1)) {
+        return null;
+      }
+      if (isFood && !canAddFood(1)) {
+        return null;
+      }
+      
+      state.inventory[itemType] = (state.inventory[itemType] || 0) + 1;
       removePickup(world, n.item);
       return n.item;
     }
@@ -1960,6 +2014,10 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
 
     if (actName === 'seek_material') {
+      if (!canAddMaterial(1)) {
+        return false;
+      }
+      
       const targets = [];
       if (state.hunger > 0.35) targets.push('grain');
       targets.push('wood', 'ore', 'stone', 'planks', 'ingot');
@@ -2034,6 +2092,17 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
 
     if (actName === 'process') {
+      const inputToProcess = Object.keys(PROCESS).find((k) => canProcessWithoutStarvingBuildings(k));
+      if (inputToProcess) {
+        const rec = PROCESS[inputToProcess];
+        const outCount = rec.outCount || 1;
+        const isMat = isMaterialType(rec.out);
+        
+        if (isMat && !canAddMaterial(outCount)) {
+          return false;
+        }
+      }
+      
       if (!canProcessAny()) {
         const n = nearestPickup(world, group.position, ['wood', 'ore', 'grain', 'berry', 'water', 'fish']);
         const forageWood = s.forageWood.item;
@@ -2286,6 +2355,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     }
     
     if (hud.inv) {
+      const materialCount = getMaterialCount();
+      const packStatus = `<span class="inv-chip pack-status">Pack ${materialCount}/${MATERIAL_CAP}</span>`;
+      
       const bits = ALL_ITEM_TYPES.map((t) => {
         const n = state.inventory[t] || 0;
         const colors = {
@@ -2307,7 +2379,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
         return `<span class="inv-chip ${n ? '' : 'empty'}"><span class="dot" style="background:${colors[t]}"></span>${t} ×${n}</span>`;
       });
       if (state.hasTools) bits.push(`<span class="inv-chip"><span class="dot" style="background:#6e7b85"></span>tools</span>`);
-      hud.inv.innerHTML = bits.join('');
+      hud.inv.innerHTML = packStatus + bits.join('');
     }
   }
 

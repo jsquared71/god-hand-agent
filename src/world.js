@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 
 // Shared pond specification
-const POND_SPEC = {
+export const POND_SPEC = {
   centerX: -2,
   centerZ: -11,
   basinRadius: 6.5,
   waterRadius: 5.8,
-  floorY: -0.50,
-  surfaceY: -0.05,
+  floorY: -0.18,
+  surfaceY: -0.03,
 };
 
 // Seeded RNG (simple LCG)

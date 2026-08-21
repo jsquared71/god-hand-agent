@@ -1,17 +1,7 @@
 import * as THREE from 'three';
-import { getBiomeAt } from './world.js';
+import { POND_SPEC } from './world.js';
 
 let nextId = 1;
-
-// Pond spec (matches world.js)
-const POND_SPEC = {
-  centerX: -2,
-  centerZ: -11,
-  basinRadius: 6.5,
-  waterRadius: 5.8,
-  floorY: -0.50,
-  surfaceY: -0.05,
-};
 
 export function spawnPickup(world, assets, type, position, { falling = true, isWorldSpawned = false, spawnOrigin = null } = {}) {
   const mesh = assets.create(type);

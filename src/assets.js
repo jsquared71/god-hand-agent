@@ -957,6 +957,46 @@ export class AssetLibrary {
       const buf = await res.arrayBuffer();
       const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
       const root = gltf.scene || gltf.scenes[0];
+      
+      // Special handling for agent: wrap instead of scaling directly
+      if (id === 'agent') {
+        const wrapper = new THREE.Group();
+        wrapper.name = 'agentWrapper';
+        
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+        const target = TARGET_SIZE[id] ?? 1;
+        const scale = target / maxDim;
+        
+        wrapper.add(root);
+        wrapper.scale.setScalar(scale);
+        
+        wrapper.updateMatrixWorld(true);
+        const box2 = new THREE.Box3().setFromObject(wrapper);
+        if (Number.isFinite(box2.min.y)) {
+          wrapper.position.y -= box2.min.y;
+        }
+        
+        wrapper.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+        
+        wrapper.userData.fromGltf = true;
+        
+        if (gltf.animations && gltf.animations.length > 0) {
+          wrapper.userData.clips = gltf.animations;
+        }
+        
+        this.cache.set(id, wrapper);
+        this.source.set(id, 'glb');
+        return wrapper;
+      }
+      
+      // For non-agent assets, use normal centerAndScale
       centerAndScale(root, id);
       root.userData.fromGltf = true;
       
@@ -982,6 +1022,52 @@ export class AssetLibrary {
       const buf = await res.arrayBuffer();
       const gltf = await this.loader.parseAsync(buf, '/assets/glb/');
       const root = gltf.scene || gltf.scenes[0];
+      
+      // Special handling for agent: wrap instead of scaling directly
+      // This preserves the armature's original space for Mixamo clips
+      if (id === 'agent') {
+        const wrapper = new THREE.Group();
+        wrapper.name = 'agentWrapper';
+        
+        // Calculate scale without modifying the armature
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+        const target = TARGET_SIZE[id] ?? 1;
+        const scale = target / maxDim;
+        
+        // Add armature to wrapper and scale the wrapper
+        wrapper.add(root);
+        wrapper.scale.setScalar(scale);
+        
+        // Sit wrapper on ground
+        wrapper.updateMatrixWorld(true);
+        const box2 = new THREE.Box3().setFromObject(wrapper);
+        if (Number.isFinite(box2.min.y)) {
+          wrapper.position.y -= box2.min.y;
+        }
+        
+        // Enable shadows on the wrapper's contents
+        wrapper.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+        
+        wrapper.userData.fromGltf = true;
+        
+        // Store animations if present
+        if (gltf.animations && gltf.animations.length > 0) {
+          wrapper.userData.clips = gltf.animations;
+        }
+        
+        this.cache.set(id, wrapper);
+        this.source.set(id, 'glb');
+        return wrapper;
+      }
+      
+      // For non-agent assets, use normal centerAndScale
       centerAndScale(root, id);
       root.userData.fromGltf = true;
       

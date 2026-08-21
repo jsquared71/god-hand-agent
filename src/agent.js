@@ -67,6 +67,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     hunger: 0.62,
     energy: 1,
     entertainment: 1.0, // Mood/boredom stat (1 = engaged, 0 = bored)
+    wanderlust: 0.0, // Place-novelty drive (0 = content, 1 = restless)
     inventory: emptyInventory(),
     hasTools: false,
     bestGatherMult: 1.0,
@@ -89,6 +90,9 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     lastBusyKind: null, // Track last busy kind to avoid immediate repetition
     lastPosition: { x: 0, z: 0 }, // Track position for walk distance
     distanceTraveled: 0, // Track travel distance for entertainment
+    currentBiome: null, // Current biome (meadow, forest, rock, water)
+    biomeEntryTime: 0, // Time when entered current biome
+    lastBiomeVisit: {}, // Map of biome -> time since visited (for novelty)
   };
 
   const hud = {
@@ -98,6 +102,8 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     energyVal: document.getElementById(`${name.toLowerCase()}-energy-val`),
     moodFill: document.getElementById(`${name.toLowerCase()}-mood-fill`),
     moodVal: document.getElementById(`${name.toLowerCase()}-mood-val`),
+    wanderlustFill: document.getElementById(`${name.toLowerCase()}-wanderlust-fill`),
+    wanderlustVal: document.getElementById(`${name.toLowerCase()}-wanderlust-val`),
     action: document.getElementById(`${name.toLowerCase()}-mind`),
     inv: document.getElementById(`${name.toLowerCase()}-inv`),
   };
@@ -117,6 +123,36 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     return dist < FIRE_RADIUS ? item : null;
   }
   
+  function getBiomeAt(x, z) {
+    // Biome layout based on world.js:
+    // meadow: x in [3, 13], z in [-6, 6] (east/center)
+    // forest: x in [-14, -6], z in [-6, 6] (west)
+    // rock: x in [-6, 6], z in [7, 15] (south)
+    // water: around x in [-3, -1], z in [-12, -10] (north, pond center ~5.5 radius)
+    
+    const pondCenterX = -2;
+    const pondCenterZ = -11;
+    const pondRadius = 6.5; // Slightly larger than visual pond for gathering area
+    
+    const distToPond = Math.hypot(x - pondCenterX, z - pondCenterZ);
+    if (distToPond < pondRadius) return 'water';
+    
+    if (z >= 7 && z <= 15 && x >= -6 && x <= 6) return 'rock';
+    if (x >= -14 && x <= -6 && z >= -6 && z <= 6) return 'forest';
+    if (x >= 3 && x <= 13 && z >= -6 && z <= 6) return 'meadow';
+    
+    // Default to closest biome edge for ambiguous positions
+    const distToMeadow = Math.max(0, Math.max(3 - x, x - 13), Math.max(-6 - z, z - 6));
+    const distToForest = Math.max(0, Math.max(-14 - x, x - (-6)), Math.max(-6 - z, z - 6));
+    const distToRock = Math.max(0, Math.max(-6 - x, x - 6), Math.max(7 - z, z - 15));
+    
+    const minDist = Math.min(distToMeadow, distToForest, distToRock, distToPond);
+    if (minDist === distToMeadow) return 'meadow';
+    if (minDist === distToForest) return 'forest';
+    if (minDist === distToRock) return 'rock';
+    return 'water';
+  }
+  
   function distanceToNearestAgent() {
     if (!world.agents || world.agents.length <= 1) return Infinity;
     let minDist = Infinity;
@@ -134,6 +170,32 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const { dist } = nearestBuilding(world, group.position, 'fire');
     return dist;
   }
+  
+  function getForageBiome(source) {
+    // Infer biome from harvest type or position
+    if (!source) return null;
+    
+    // Direct biome tag if available
+    if (source.biome) return source.biome;
+    
+    // Infer from harvest type
+    const harvestType = source.harvestType;
+    if (harvestType === 'berry' || harvestType === 'grain' || harvestType === 'mushroom' || harvestType === 'herb') {
+      return 'meadow';
+    }
+    if (harvestType === 'wood' || harvestType === 'fruit') {
+      return 'forest';
+    }
+    if (harvestType === 'stone' || harvestType === 'ore') {
+      return 'rock';
+    }
+    if (harvestType === 'water' || harvestType === 'fish') {
+      return 'water';
+    }
+    
+    // Fallback: infer from position
+    return getBiomeAt(source.mesh.position.x, source.mesh.position.z);
+  }
 
   function snap() {
     const food = nearestPickup(world, group.position, FOOD_TYPES);
@@ -144,11 +206,51 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const wb = nearestBuilding(world, group.position, 'workbench');
     const hut = nearestBuilding(world, group.position, 'hut');
     
+    const currentBiome = getBiomeAt(group.position.x, group.position.z);
+    
+    // Find forage sources, organized by biome if wanderlust is high
     const forageFood = nearestForageSource(world, group.position, ['berry', 'grain', 'fish', 'mushroom', 'fruit', 'herb']);
     const forageWood = nearestForageSource(world, group.position, ['wood']);
     const forageOre = nearestForageSource(world, group.position, ['ore']);
     const forageStone = nearestForageSource(world, group.position, ['stone']);
     const forageWater = nearestForageSource(world, group.position, ['water']);
+    
+    // If wanderlust is high (>0.6), prefer targets in different biome
+    let forageTargets = {
+      food: forageFood,
+      wood: forageWood,
+      ore: forageOre,
+      stone: forageStone,
+      water: forageWater,
+    };
+    
+    if (state.wanderlust > 0.6) {
+      // Find forage sources in different biomes
+      const allForageSources = world.forageSources || [];
+      
+      for (const [key, types] of [
+        ['food', ['berry', 'grain', 'fish', 'mushroom', 'fruit', 'herb']],
+        ['wood', ['wood']],
+        ['ore', ['ore']],
+        ['stone', ['stone']],
+        ['water', ['water']],
+      ]) {
+        const alternatives = allForageSources
+          .filter(s => types.includes(s.harvestType) && s.charges > 0)
+          .map(s => ({
+            source: s,
+            biome: getForageBiome(s),
+            dist: Math.hypot(s.mesh.position.x - group.position.x, s.mesh.position.z - group.position.z),
+          }))
+          .filter(opt => opt.biome && opt.biome !== currentBiome)
+          .sort((a, b) => a.dist - b.dist);
+        
+        if (alternatives.length > 0) {
+          forageTargets[key] = { item: alternatives[0].source, dist: alternatives[0].dist };
+        }
+      }
+    }
+    
     const huntable = nearestHuntableFauna(world, group.position);
     const tendable = nearestTendableFauna(world, group.position);
     
@@ -160,11 +262,11 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       grain,
       wb,
       hut,
-      forageFood,
-      forageWood,
-      forageOre,
-      forageStone,
-      forageWater,
+      forageFood: forageTargets.food,
+      forageWood: forageTargets.wood,
+      forageOre: forageTargets.ore,
+      forageStone: forageTargets.stone,
+      forageWater: forageTargets.water,
       huntable,
       tendable,
       hasHut: world.buildings.some((b) => b.type === 'hut'),
@@ -172,6 +274,7 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
       hasForageSources: world.forageSources && world.forageSources.some((s) => s.charges > 0),
       hasPen: world.buildings.some((b) => b.type === 'pen'),
       hasTrough: world.buildings.some((b) => b.type === 'trough'),
+      currentBiome,
     };
   }
 
@@ -1318,12 +1421,15 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     const h = Math.round(state.hunger * 100);
     const e = Math.round(state.energy * 100);
     const m = Math.round(state.entertainment * 100);
+    const w = Math.round(state.wanderlust * 100);
     if (hud.hungerFill) hud.hungerFill.style.width = `${h}%`;
     if (hud.hungerVal) hud.hungerVal.textContent = `${h}%`;
     if (hud.energyFill) hud.energyFill.style.width = `${e}%`;
     if (hud.energyVal) hud.energyVal.textContent = `${e}%`;
     if (hud.moodFill) hud.moodFill.style.width = `${m}%`;
     if (hud.moodVal) hud.moodVal.textContent = `${m}%`;
+    if (hud.wanderlustFill) hud.wanderlustFill.style.width = `${w}%`;
+    if (hud.wanderlustVal) hud.wanderlustVal.textContent = `${w}%`;
     
     // Update this agent's mind status
     if (hud.action) {
@@ -1450,6 +1556,54 @@ export function createAgent(world, assets, priors = null, notebook = null, name 
     
     // Apply entertainment drain
     state.entertainment = Math.max(0, state.entertainment - entertainmentDrain);
+    
+    // Wanderlust updates
+    const currentBiome = getBiomeAt(group.position.x, group.position.z);
+    
+    // Detect biome change
+    if (currentBiome !== state.currentBiome) {
+      // Entered a new biome
+      const timeSinceLastVisit = state.lastBiomeVisit[currentBiome] || 999;
+      
+      // Drop wanderlust if entering a novel or not-recently-visited biome
+      if (timeSinceLastVisit > 30) {
+        // Haven't been here in 30+ seconds or never: big drop
+        state.wanderlust = Math.max(0, state.wanderlust - 0.5);
+      } else if (timeSinceLastVisit > 10) {
+        // Haven't been here in 10+ seconds: medium drop
+        state.wanderlust = Math.max(0, state.wanderlust - 0.3);
+      }
+      
+      // Update biome tracking
+      if (state.currentBiome) {
+        state.lastBiomeVisit[state.currentBiome] = 0; // Just left this biome
+      }
+      state.currentBiome = currentBiome;
+      state.biomeEntryTime = 0;
+    }
+    
+    // Increment biome time
+    if (state.currentBiome) {
+      state.biomeEntryTime += dt;
+      
+      // Increment time-since-visit for other biomes
+      for (const biome in state.lastBiomeVisit) {
+        if (biome !== state.currentBiome) {
+          state.lastBiomeVisit[biome] += dt;
+        }
+      }
+    }
+    
+    // Wanderlust climbs while staying in same biome
+    // Base rate: 0.015/s (reaches 1.0 in ~67 seconds in same biome)
+    let wanderlustGain = 0.015 * dt;
+    
+    // Faster climb if foraging/eating in same biome
+    if (state.busy && (state.busy.kind === 'forage' || state.busy.kind === 'eat')) {
+      wanderlustGain *= 2.0; // Double rate when actively using resources here
+    }
+    
+    state.wanderlust = Math.min(1, state.wanderlust + wanderlustGain);
 
     if (!state.busy) {
       state.thinkAcc += dt;

@@ -142,6 +142,10 @@ body::after {
   background: linear-gradient(90deg, #1a7a8a, #2ac9d8);
 }
 
+.bar-fill.comfort {
+  background: linear-gradient(90deg, #a84832, #e8976f);
+}
+
 .bar-fill.favor {
   background: linear-gradient(90deg, #8a5a12, var(--accent));
 }

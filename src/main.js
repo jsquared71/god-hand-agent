@@ -13,7 +13,7 @@ import {
   startAutosave,
   deserializeWorld,
 } from './save.js';
-import { startFireCrackle, stopFireCrackle } from './audio.js';
+import { startFireCrackle, stopFireCrackle, setAudioEnabled, stopRain, stopWind } from './audio.js';
 import { DiscoveryNotebook } from './discovery.js';
 import { createLabelRenderer, createNameTag, updateHealthBar, resizeLabelRenderer } from './nametags.js';
 
@@ -210,6 +210,31 @@ if (loadBtn) {
         showNotification('Failed to load save file. Check console for details.', 'error');
         console.error('Load error:', err);
       }
+    }
+  });
+}
+
+// Setup mute button
+const muteBtn = document.getElementById('mute-btn');
+if (muteBtn) {
+  // Load mute preference from localStorage
+  const savedMuted = localStorage.getItem('audioMuted') === 'true';
+  if (savedMuted) {
+    muteBtn.classList.add('muted');
+    setAudioEnabled(false);
+  }
+  
+  muteBtn.addEventListener('click', () => {
+    const isMuted = muteBtn.classList.toggle('muted');
+    setAudioEnabled(!isMuted);
+    localStorage.setItem('audioMuted', isMuted);
+    
+    // Stop active loops when muting
+    if (isMuted) {
+      stopFireCrackle();
+      stopRain();
+      stopWind();
+      gameState.fireCrackleActive = false;
     }
   });
 }

@@ -612,6 +612,12 @@ body.dragging-resource {
   pointer-events: none;
   font-size: 11px;
   line-height: 1.6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sky-info {
   text-align: right;
 }
 
@@ -625,4 +631,54 @@ body.dragging-resource {
   color: var(--accent);
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.mute-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
+.mute-btn:hover {
+  border-color: rgba(212, 160, 23, 0.4);
+  background: rgba(212, 160, 23, 0.12);
+  transform: scale(1.05);
+}
+
+.mute-btn:active {
+  transform: scale(0.95);
+}
+
+.mute-btn .mute-icon {
+  display: none;
+}
+
+.mute-btn .mute-icon.unmuted {
+  display: block;
+}
+
+.mute-btn.muted .mute-icon.unmuted {
+  display: none;
+}
+
+.mute-btn.muted .mute-icon.muted {
+  display: block;
+}
+
+.mute-btn.muted {
+  border-color: rgba(217, 119, 74, 0.4);
+  background: rgba(217, 119, 74, 0.15);
+  color: var(--hunger);
 }
